@@ -1,5 +1,5 @@
 1.打開終端機(CMD)  
-&nbsp;輸入node server.js  
+&nbsp;&nbsp;輸入node server.js  
 2.打開第二個終端機視窗，輸入你的專案密碼  
   ngrok config add-authtoken 你的實際Token字串  
 3.開啟對外通道(每次測試都要開)  
