@@ -110,7 +110,7 @@
         }
         /* 模擬一般地圖預覽 */
         .preview-normal { background: #1e293b; background-image: linear-gradient(#334155 1px, transparent 1px), linear-gradient(90deg, #334155 1px, transparent 1px); background-size: 20px 20px; }
-        /* 模擬輸送帶地圖預覽 - 使用與遊戲內相同的 SVG 箭頭資料 */
+        /* 模擬輸送帶地圖預覽 */
         .preview-conveyor { 
             background-color: #0f766e; 
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpolygon points='128,40 200,140 160,140 160,220 96,220 96,140 56,140' fill='%2314b8a6'/%3E%3C/svg%3E");
@@ -380,7 +380,7 @@
             </div>
         </div>
 
-        <!-- 多人選單 -->
+        <!-- 多人選單 (已修正 HTML 嵌套錯誤) -->
         <div id="multiplayer-panel" class="panel hidden">
             <h1 class="game-title" style="font-size: 2.2rem;">多人連線</h1>
             <div class="game-subtitle" style="margin-bottom: 15px;">Multiplayer</div>
@@ -402,8 +402,6 @@
                     </div>
                 </div>
             </div>
-
-            </div>
             
             <div class="divider" style="margin: 20px 0 10px 0;">進階連線設定</div>
             <div class="menu-card" style="padding: 15px; border-color: rgba(16, 185, 129, 0.3);">
@@ -413,9 +411,6 @@
                     <button id="btn-save-server" class="success" style="padding: 10px 15px; font-size: 0.9rem;">儲存並重整</button>
                 </div>
             </div>
-            <button id="btn-mp-back" class="danger" style="margin-top: 15px; padding: 12px;">返回主選單</button>
-        </div>
-            
             <button id="btn-mp-back" class="danger" style="margin-top: 15px; padding: 12px;">返回主選單</button>
         </div>
 
@@ -749,7 +744,6 @@
         actx.fillRect(0, 0, 256, 256);
         actx.fillStyle = '#14b8a6'; // 箭頭顏色
         actx.beginPath();
-        // 畫一個朝上的箭頭 (rot=0 時朝上)
         actx.moveTo(128, 40);
         actx.lineTo(200, 140);
         actx.lineTo(160, 140);
@@ -761,7 +755,6 @@
         actx.fill();
         const conveyorPattern = new THREE.CanvasTexture(arrowTexCanvas);
         conveyorPattern.wrapS = THREE.RepeatWrapping; conveyorPattern.wrapT = THREE.RepeatWrapping;
-        // 材質設定
         const conveyorGroundMat = new THREE.MeshStandardMaterial({ 
             color: 0xffffff, roughness: 0.6, map: conveyorPattern 
         });
@@ -781,12 +774,10 @@
                 ground.geometry.dispose();
                 ground.geometry = new THREE.PlaneGeometry(size * 2, size * 2);
                 
-                // 根據地圖類型切換材質
                 if (mapType === 'conveyor') {
                     ground.material = conveyorGroundMat;
                     conveyorPattern.repeat.set(size / 100, size / 100);
                     conveyorGroundMat.map.rotation = conveyorDirections[currentConveyorDirIndex].rot;
-                    // 因為旋轉了，中心點偏移設定
                     conveyorGroundMat.map.center.set(0.5, 0.5);
                 } else if (mapType === 'ice') {
                     ground.material = iceGroundMat;
@@ -875,12 +866,10 @@
             let difficultyLevel = parseInt(document.getElementById('npc-difficulty-select').value);
             let now = Date.now();
 
-            // 處理向量推力地圖的邏輯
             let currentConveyorForce = { x: 0, z: 0 };
             if (selectedMapType === 'conveyor') {
                 let switchMs = (localGameState.conveyorSwitchTime || 30) * 1000;
                 if (now - lastConveyorSwitchTime >= switchMs) {
-                    // 切換方向，確保不和當前方向相同
                     let nextDir;
                     do { nextDir = Math.floor(Math.random() * 4); } while (nextDir === currentConveyorDirIndex);
                     currentConveyorDirIndex = nextDir;
@@ -888,7 +877,6 @@
                     conveyorIsWarning = false;
                     document.getElementById('conveyor-warning').style.display = 'none';
                 } else if (now - lastConveyorSwitchTime >= switchMs - 3000) {
-                    // 切換前3秒發出預警
                     if (!conveyorIsWarning) {
                         conveyorIsWarning = true;
                         document.getElementById('conveyor-warning').style.display = 'block';
@@ -910,7 +898,6 @@
                 }
             }
 
-            // AI 控制
             for (let id in players) {
                 if (id === myId) continue; 
                 let p = players[id];
@@ -950,7 +937,6 @@
                 }
 
                 if (targetX !== null && targetZ !== null) {
-                    // AI 需要考慮地板推力的抵抗 (簡單的預測補償)
                     if (selectedMapType === 'conveyor' && difficultyLevel >= 2) {
                         targetX -= currentConveyorForce.x * 20;
                         targetZ -= currentConveyorForce.z * 20;
@@ -966,7 +952,6 @@
                 if (p.isGrounded && Math.random() < (difficultyLevel * 0.004)) p.input.jump = true;
             }
 
-            // 物理與位移
             for (let id in players) {
                 let p = players[id];
                 p.vx = p.vx || 0; p.vz = p.vz || 0;
@@ -990,7 +975,6 @@
                     }
                 }
                 
-                // 加速帶觸發
                 for (let i = 0; i < boostPads.length; i++) {
                     let pad = boostPads[i];
                     if (Math.hypot(p.x - pad.x, p.z - pad.z) < p.radius + pad.radius) {
@@ -1037,7 +1021,6 @@
                 let iceFriction = localGameState.iceFriction || 0.97;
                 let friction = (isIce && p.isGrounded) ? iceFriction : baseFriction;
                 
-                // 計算基礎玩家移動向量
                 let playerMoveX, playerMoveZ;
                 if (isIce) {
                     let accelRate = p.isGrounded ? 0.04 : 0.01; 
@@ -1050,16 +1033,14 @@
                     playerMoveZ = input.dz * speed + p.vz;
                 }
                 
-                // 結合環境向量推力 (若在空中則受推力影響較小)
                 let environmentForceX = 0;
                 let environmentForceZ = 0;
                 if (selectedMapType === 'conveyor') {
-                    let forceMulti = p.isGrounded ? 1.0 : 0.3; // 空中受力減弱
+                    let forceMulti = p.isGrounded ? 1.0 : 0.3; 
                     environmentForceX = currentConveyorForce.x * forceMulti;
                     environmentForceZ = currentConveyorForce.z * forceMulti;
                 }
 
-                // 物理疊加: 完美詮釋「順向增幅 / 逆向減阻」
                 p.x += playerMoveX + environmentForceX; 
                 p.z += playerMoveZ + environmentForceZ;
                 
@@ -1076,7 +1057,6 @@
                 if (input.jump && p.isGrounded) { p.vy = 25; p.input.jump = false; }
             }
 
-            // 吃食物
             for (let id in players) {
                 let p = players[id];
                 for (let i = pellets.length - 1; i >= 0; i--) {
@@ -1089,7 +1069,6 @@
                 }
             }
 
-            // 尖刺碰撞
             for (let id in players) {
                 let p = players[id];
                 for (let i = 0; i < spikes.length; i++) {
@@ -1121,7 +1100,6 @@
                 }
             }
 
-            // 玩家碰撞推擠
             let playerIds = Object.keys(players);
             for (let i = 0; i < playerIds.length; i++) {
                 for (let j = i + 1; j < playerIds.length; j++) {
@@ -1176,7 +1154,6 @@
                 }
             }
             
-            // 掉落虛空
             for (let id in players) {
                 let p = players[id];
                 if (p.y + p.radius < 0) {
@@ -1253,7 +1230,6 @@
             statusText.innerText = text;
         }
 
-        // --- 地圖選擇 UI 事件 ---
         function renderMapSelectUI() {
             const map = MapTypes[currentMapSelectIndex];
             document.getElementById('map-name-ui').innerText = map.name;
@@ -1272,7 +1248,6 @@
             renderMapSelectUI();
         };
 
-        // --- 面板切換事件 ---
         document.getElementById('btn-show-multiplayer').onclick = () => {
             mainMenuPanel.classList.add('hidden');
             multiplayerPanel.classList.remove('hidden');
@@ -1283,7 +1258,6 @@
             mainMenuPanel.classList.remove('hidden');
         };
 
-        // 單人模式進入 -> 先選地圖
         document.getElementById('btn-show-singleplayer').onclick = () => {
             isSinglePlayer = true;
             mainMenuPanel.classList.add('hidden');
@@ -1292,7 +1266,6 @@
             renderMapSelectUI();
         };
 
-        // 多人模式創建房間 -> 先選地圖
         document.getElementById('btn-create-room').onclick = () => { 
             isSinglePlayer = false;
             multiplayerPanel.classList.add('hidden');
@@ -1300,7 +1273,6 @@
             renderMapSelectUI();
         };
 
-        // 確認地圖後的分流
         document.getElementById('btn-map-next').onclick = () => {
             mapSelectPanel.classList.add('hidden');
             selectedMapType = MapTypes[currentMapSelectIndex].id;
@@ -1337,7 +1309,6 @@
             }
         };
 
-        // 外觀設定 -> 下一步
         document.getElementById('btn-start-game').onclick = () => {
             const nameInput = document.getElementById('name-input');
             const name = nameInput.value.trim();
@@ -1356,7 +1327,6 @@
             }
         };
 
-        // 外觀設定 -> 返回
         document.getElementById('btn-color-back').onclick = () => {
             colorPanel.classList.add('hidden');
             if (isSinglePlayer) {
@@ -1371,7 +1341,6 @@
             }
         };
 
-        // 單人參數滑塊連動
         const mapSizeSlider = document.getElementById('map-size-slider');
         const mapSizeVal = document.getElementById('map-size-val');
         mapSizeSlider.oninput = (e) => mapSizeVal.innerText = e.target.value;
@@ -1428,7 +1397,6 @@
         const iceFrictionVal = document.getElementById('ice-friction-val');
         if (iceFrictionSlider) iceFrictionSlider.oninput = (e) => iceFrictionVal.innerText = e.target.value;
 
-        // 多人參數滑塊連動
         const mpMapSizeSlider = document.getElementById('mp-map-size-slider');
         const mpMapSizeVal = document.getElementById('mp-map-size-val');
         mpMapSizeSlider.oninput = (e) => mpMapSizeVal.innerText = e.target.value;
@@ -1481,7 +1449,6 @@
         const mpIceFrictionVal = document.getElementById('mp-ice-friction-val');
         if (mpIceFrictionSlider) mpIceFrictionSlider.oninput = (e) => mpIceFrictionVal.innerText = e.target.value;
 
-        // 單人設定 -> 下一步 / 返回
         document.getElementById('btn-sp-settings-next').onclick = () => {
             spSettingsPanel.classList.add('hidden');
             colorPanel.classList.remove('hidden'); 
@@ -1489,7 +1456,7 @@
 
         document.getElementById('btn-sp-settings-back').onclick = () => {
             spSettingsPanel.classList.add('hidden');
-            mapSelectPanel.classList.remove('hidden'); // 返回地圖選擇
+            mapSelectPanel.classList.remove('hidden'); 
         };
 
         function initSinglePlayer() {
@@ -1511,7 +1478,6 @@
             worldSize = parseInt(mapSizeSlider.value);
             updateWorldSize(worldSize, selectedMapType);
 
-            // 初始化輸送帶方向
             if (selectedMapType === 'conveyor') {
                 currentConveyorDirIndex = Math.floor(Math.random() * 4);
                 lastConveyorSwitchTime = Date.now();
@@ -1577,7 +1543,6 @@
             };
         }
 
-        // 多人房主設定確認
         document.getElementById('btn-mp-settings-create').onclick = () => {
             isHost = true; 
             const config = {
@@ -1602,10 +1567,9 @@
 
         document.getElementById('btn-mp-settings-back').onclick = () => {
             mpSettingsPanel.classList.add('hidden');
-            mapSelectPanel.classList.remove('hidden'); // 返回選地圖
+            mapSelectPanel.classList.remove('hidden'); 
         };
 
-        // 多人訪客加入
         document.getElementById('btn-join-room').onclick = () => {
             isHost = false; 
             const code = document.getElementById('room-input').value.trim();
@@ -1618,7 +1582,7 @@
             if (typeof data === 'object') {
                 currentRoom = data.roomId;
                 worldSize = data.mapSize || 800;
-                selectedMapType = data.mapType || 'normal'; // 接收後端的地圖設定
+                selectedMapType = data.mapType || 'normal'; 
             } else {
                 currentRoom = data;
                 worldSize = 800; 
@@ -1871,17 +1835,13 @@
             if (!isSinglePlayer) { gameState = state; updateLeaderboard(); }
         });
 
-        // 渲染動畫迴圈
         function animate() {
             requestAnimationFrame(animate);
             if (!isPlaying) return;
 
-            // 輸送帶地圖的材質動畫：箭頭流動與平滑轉向
             if (selectedMapType === 'conveyor' && ground && ground.material.map) {
-                // 流動特效 (UV offset)
                 ground.material.map.offset.y -= 0.015;
                 
-                // 警報狀態閃爍變紅
                 if (conveyorIsWarning) {
                     let pulse = Math.abs(Math.sin(Date.now() * 0.01));
                     ground.material.color.setHex(pulse > 0.5 ? 0xff4444 : 0xffffff);
@@ -1889,16 +1849,14 @@
                     ground.material.color.setHex(0xffffff);
                 }
 
-                // 平滑轉向邏輯
                 let targetRot = conveyorDirections[currentConveyorDirIndex].rot;
                 let currentRot = ground.material.map.rotation;
                 let diff = targetRot - currentRot;
-                // 正規化角度差異至 -PI ~ PI
                 while(diff < -Math.PI) diff += Math.PI * 2;
                 while(diff > Math.PI) diff -= Math.PI * 2;
                 
                 if (Math.abs(diff) > 0.01) {
-                    ground.material.map.rotation += diff * 0.08; // 平滑過渡
+                    ground.material.map.rotation += diff * 0.08; 
                 }
             }
 
