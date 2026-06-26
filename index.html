@@ -876,7 +876,7 @@
             </div>
         </div>
 
-        <!-- 多人選單 (已修正 HTML 嵌套錯誤) -->
+        <!-- 多人選單 -->
         <div id="multiplayer-panel" class="panel hidden">
             <h1 class="game-title" style="font-size: 2.2rem;">多人連線</h1>
             <div class="game-subtitle" style="margin-bottom: 15px;">Multiplayer</div>
@@ -1151,45 +1151,36 @@
             setTimeout(() => input.classList.remove('shake-error'), 400);
         }
 
-        // 🔽 修改：動態讀取伺服器網址 🔽
         const defaultBackend = 'https://sphere-war.onrender.com';
-        // 從瀏覽器記憶中讀取是否有自訂的 ngrok 網址
         const customBackend = localStorage.getItem('sphere_war_custom_server');
         const backendUrl = customBackend ? customBackend : defaultBackend;
 
-        // ✨ 【關鍵修正】調整 Socket.io 設定，使其能順利穿透 ngrok 限制
         const socket = io(backendUrl, {
             autoConnect: true,
             transports: ['websocket', 'polling'],
             secure: true,
-            rejectUnauthorized: false // 允許穿透 ngrok 的憑證限制
+            rejectUnauthorized: false 
         });
 
-        // 將網址顯示在輸入框中
         window.addEventListener('DOMContentLoaded', () => {
             const serverInput = document.getElementById('custom-server-input');
             if (customBackend) {
                 serverInput.value = customBackend;
-                // 在連線狀態加上提示，避免忘記自己連在測試服
                 document.getElementById('status-text').innerText += ' (自訂)';
             }
 
-            // 綁定儲存按鈕的事件
             document.getElementById('btn-save-server').onclick = () => {
                 const val = serverInput.value.trim();
                 if (val) {
                     localStorage.setItem('sphere_war_custom_server', val);
                     showToast('已切換至自訂伺服器，重新載入中...', true);
                 } else {
-                    // 如果輸入框留白，就清空記憶，恢復預設的 Render 伺服器
                     localStorage.removeItem('sphere_war_custom_server');
                     showToast('已恢復預設伺服器，重新載入中...', true);
                 }
-                // 延遲 1.5 秒後重新整理網頁套用新網址
                 setTimeout(() => window.location.reload(), 1500);
             };
         });
-        // 🔼 修改結束 🔼
 
         // --- 地圖系統設計 ---
         const MapTypes = [
@@ -1201,7 +1192,6 @@
         let currentMapSelectIndex = 0;
         let selectedMapType = 'normal';
 
-        // 向量推力變數
         const conveyorDirections = [
             { x: 1, z: 0, rot: -Math.PI / 2 },   // 0: Right
             { x: 0, z: 1, rot: Math.PI },      // 1: Down
@@ -1240,26 +1230,19 @@
 
         let worldSize = 800;
 
-        // 生成一般地板材質
         const normalGroundMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
-
-        // 生成冰原材質
         const iceGroundMat = new THREE.MeshStandardMaterial({ color: 0xbae6fd, roughness: 0.1, metalness: 0.4, transparent: true, opacity: 0.9 });
-
-        // 生成岩漿地板材質 (較暗)
         const magmaGroundMat = new THREE.MeshStandardMaterial({ color: 0x1a0f0f, roughness: 0.9 });
 
-        // 生成岩漿區域材質與幾何體
         const magmaGeo = new THREE.CylinderGeometry(1, 1, 1, 32);
         const magmaMat = new THREE.MeshStandardMaterial({ color: 0xff0000, transparent: true, opacity: 0.5, emissive: 0xff0000, emissiveIntensity: 0.5 });
 
-        // 動態生成輸送帶箭頭貼圖
         const arrowTexCanvas = document.createElement('canvas');
         arrowTexCanvas.width = 256; arrowTexCanvas.height = 256;
         const actx = arrowTexCanvas.getContext('2d');
-        actx.fillStyle = '#0f766e'; // 背景色
+        actx.fillStyle = '#0f766e'; 
         actx.fillRect(0, 0, 256, 256);
-        actx.fillStyle = '#14b8a6'; // 箭頭顏色
+        actx.fillStyle = '#14b8a6'; 
         actx.beginPath();
         actx.moveTo(128, 40);
         actx.lineTo(200, 140);
@@ -1287,6 +1270,7 @@
 
         function updateWorldSize(size, mapType = 'normal') {
             selectedMapType = mapType;
+            worldSize = size;
             if (ground) {
                 ground.geometry.dispose();
                 ground.geometry = new THREE.PlaneGeometry(size * 2, size * 2);
@@ -1326,10 +1310,14 @@
                 gridHelper = new THREE.GridHelper(size * 2, divisions, 0x450a0a, 0x1a0505);
                 gridHelper.position.y = 0.1;
                 scene.add(gridHelper);
+            } else if (mapType === 'conveyor') {
+                const divisions = Math.max(10, Math.floor(size / 20));
+                gridHelper = new THREE.GridHelper(size * 2, divisions, 0x0f766e, 0x115e59);
+                gridHelper.position.y = 0.1;
+                scene.add(gridHelper);
             }
         }
 
-        // 動態生成球體紋理
         const ballTexCanvas = document.createElement('canvas');
         ballTexCanvas.width = 512; ballTexCanvas.height = 512;
         const ctx = ballTexCanvas.getContext('2d');
@@ -1482,7 +1470,7 @@
                 if (p.damageEffect > 0) p.damageEffect--;
                 p.inMagma = false;
 
-                if (localGameState.magmas) {
+                if (selectedMapType === 'magma' && localGameState.magmas) {
                     for (let i = 0; i < localGameState.magmas.length; i++) {
                         let m = localGameState.magmas[i];
                         if (Math.hypot(p.x - m.x, p.z - m.z) < p.radius + m.radius) {
@@ -2112,13 +2100,14 @@
             if (typeof data === 'object') {
                 currentRoom = data.roomId;
                 worldSize = data.mapSize || 800;
-                selectedMapType = data.mapType || 'normal';
+                selectedMapType = data.mapType || 'normal'; // 【關鍵修復四】同步獲取伺服器回傳的地圖類型
             } else {
                 currentRoom = data;
                 worldSize = 800;
                 selectedMapType = 'normal';
             }
 
+            // 【關鍵修復五】立即更新 3D 地板大小與地圖貼圖材質，解決黑地板、貼圖變紅及顯示岩漿問題
             updateWorldSize(worldSize, selectedMapType);
 
             multiplayerPanel.classList.add('hidden');
@@ -2362,24 +2351,35 @@
         }
 
         socket.on('update_game_state', (state) => {
-            if (!isSinglePlayer) { gameState = state; updateLeaderboard(); }
+            if (!isSinglePlayer) { 
+                gameState = state; 
+                // 【關鍵修復六】如果地圖不是岩漿地圖，直接清空接收到的岩漿陣列，防止因狀態更新渲染錯亂
+                if (state.mapType && state.mapType !== 'magma') {
+                    gameState.magmas = [];
+                }
+                updateLeaderboard(); 
+            }
         });
 
         function animate() {
             requestAnimationFrame(animate);
             if (!isPlaying) return;
 
+            // 輸送帶方向與動畫判定
             if (selectedMapType === 'conveyor' && ground && ground.material.map) {
                 ground.material.map.offset.y -= 0.015;
 
-                if (conveyorIsWarning) {
+                const warningState = isSinglePlayer ? conveyorIsWarning : (gameState.conveyorIsWarning);
+                const currentDirIndex = isSinglePlayer ? currentConveyorDirIndex : (gameState.currentConveyorDirIndex || 0);
+
+                if (warningState) {
                     let pulse = Math.abs(Math.sin(Date.now() * 0.01));
                     ground.material.color.setHex(pulse > 0.5 ? 0xff4444 : 0xffffff);
                 } else {
                     ground.material.color.setHex(0xffffff);
                 }
 
-                let targetRot = conveyorDirections[currentConveyorDirIndex].rot;
+                let targetRot = conveyorDirections[currentDirIndex].rot;
                 let currentRot = ground.material.map.rotation;
                 let diff = targetRot - currentRot;
                 while (diff < -Math.PI) diff += Math.PI * 2;
@@ -2493,7 +2493,8 @@
                 }
             }
 
-            if (gameState.magmas) {
+            // 【關鍵修復七】只有當前地圖是岩漿地圖 (magma) 時，才繪製與渲染岩漿。其他地圖則完全清除。
+            if (selectedMapType === 'magma' && gameState.magmas) {
                 if (gameState.magmas.length > 0) {
                     magmaMat.emissiveIntensity = 0.3 + Math.sin(Date.now() * 0.003) * 0.2;
                 }
@@ -2508,6 +2509,10 @@
                 for (let i = 0; i < gameState.magmas.length; i++) {
                     meshes.magmas[i].position.set(gameState.magmas[i].x, 0.2, gameState.magmas[i].z);
                     meshes.magmas[i].scale.set(gameState.magmas[i].radius, 1, gameState.magmas[i].radius);
+                }
+            } else {
+                while (meshes.magmas.length > 0) {
+                    const mesh = meshes.magmas.pop(); scene.remove(mesh);
                 }
             }
 
