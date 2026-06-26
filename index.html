@@ -1,0 +1,2007 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sphere War 3D</title>
+    <meta name="title" content="Sphere War 3D">
+    <meta property="og:description" content="《Sphere War 3D》是一款結合物理碰撞與生存競技的 3D 對戰遊戲。吞噬光點成長，撞出對手取得勝利！">
+    <meta property="og:title" content="Sphere War 3D">
+    <meta property="og:image" content="https://cdn.jsdelivr.net/gh/billy5986/sphere_war@main/assets/images/sphere_war_3d_thumbnail.png">
+    <meta property="og:url" content="https://billy5986.github.io/sphere_war/">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050914; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; -webkit-user-select: none; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        
+        #connection-status {
+            position: absolute; top: 20px; right: 20px; display: flex; align-items: center; gap: 10px;
+            font-size: 0.85rem; font-weight: 600; color: #e2e8f0; background: rgba(15, 23, 42, 0.5);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            padding: 10px 18px; border-radius: 30px; z-index: 20; border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background-color: #dee2e6; transition: all 0.3s; }
+        .status-dot.connected { background-color: #10b981; box-shadow: 0 0 12px #10b981; }
+        .status-dot.connecting { background-color: #f59e0b; box-shadow: 0 0 12px #f59e0b; animation: pulse 1.5s infinite; }
+        .status-dot.disconnected { background-color: #ef4444; box-shadow: 0 0 12px #ef4444; }
+
+        @keyframes pulse { 0% { opacity: 0.4; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } 100% { opacity: 0.4; transform: scale(0.8); } }
+
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: 
+                radial-gradient(circle at center, rgba(15, 23, 42, 0.7) 0%, rgba(2, 6, 23, 0.95) 100%),
+                linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
+            z-index: 10; color: white; transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .panel {
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            padding: 45px; border-radius: 32px; text-align: center; width: 440px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+            max-height: 90vh; overflow-y: auto; position: relative;
+            box-sizing: border-box;
+        }
+        
+        .panel::-webkit-scrollbar, .menu-card::-webkit-scrollbar { width: 8px; }
+        .panel::-webkit-scrollbar-track, .menu-card::-webkit-scrollbar-track { 
+            background: rgba(0, 0, 0, 0.25); border-radius: 4px; margin: 4px 0; 
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.5); 
+        }
+        .panel::-webkit-scrollbar-thumb, .menu-card::-webkit-scrollbar-thumb { 
+            background: rgba(56, 189, 248, 0.4); border-radius: 4px; 
+            border: 1px solid rgba(255,255,255,0.1); transition: background 0.3s;
+        }
+        .panel::-webkit-scrollbar-thumb:hover, .menu-card::-webkit-scrollbar-thumb:hover { 
+            background: rgba(56, 189, 248, 0.9); 
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+        }
+
+        .game-title {
+            margin-top: 0; font-size: 3.2rem; letter-spacing: 4px; font-weight: 900; text-transform: uppercase;
+            background: linear-gradient(135deg, #ffffff 0%, #38bdf8 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin-bottom: 5px; text-shadow: 0 0 30px rgba(56, 189, 248, 0.4);
+        }
+        .game-subtitle {
+            color: #94a3b8; font-size: 0.95rem; letter-spacing: 6px; text-transform: uppercase; font-weight: 700;
+            margin-bottom: 30px; text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .menu-grid { display: flex; flex-direction: column; gap: 16px; }
+        
+        .menu-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px; padding: 22px; text-align: left;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative; overflow: hidden;
+        }
+        .menu-card:hover {
+            background: rgba(255, 255, 255, 0.05); transform: translateY(-3px);
+            border-color: rgba(56, 189, 248, 0.4);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.4), 0 0 20px rgba(56, 189, 248, 0.15);
+        }
+
+        .menu-card h3 { margin: 0 0 8px 0; font-size: 1.15rem; color: #f8fafc; font-weight: 700; display: flex; align-items: center; gap: 8px; position: relative; z-index: 2; }
+        .menu-card p { margin: 0 0 16px 0; font-size: 0.9rem; color: #94a3b8; line-height: 1.5; position: relative; z-index: 2; }
+        
+        /* 地圖選擇器專用樣式 */
+        .map-preview-container { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
+        .map-btn { 
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: white; flex-shrink: 0;
+            width: 40px; height: 40px; border-radius: 50%; display: flex; justify-content: center; align-items: center;
+            cursor: pointer; transition: all 0.2s; font-size: 1.2rem;
+        }
+        .map-btn:hover { background: rgba(56, 189, 248, 0.3); border-color: #38bdf8; transform: scale(1.1); }
+        .map-display { width: 100%; text-align: center; margin-bottom: 20px; }
+        .map-preview-box {
+            flex: 1; height: 120px; border-radius: 12px;
+            border: 2px solid rgba(255,255,255,0.1); overflow: hidden; position: relative;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8); transition: all 0.3s;
+        }
+        /* 模擬一般地圖預覽 */
+        .preview-normal { background: #1e293b; background-image: linear-gradient(#334155 1px, transparent 1px), linear-gradient(90deg, #334155 1px, transparent 1px); background-size: 20px 20px; }
+        /* 模擬輸送帶地圖預覽 - 使用與遊戲內相同的 SVG 箭頭資料 */
+        .preview-conveyor { 
+            background-color: #0f766e; 
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpolygon points='128,40 200,140 160,140 160,220 96,220 96,140 56,140' fill='%2314b8a6'/%3E%3C/svg%3E");
+            background-size: 40px 40px;
+            animation: conveyorFlow 1s linear infinite;
+        }
+        @keyframes conveyorFlow { 
+            0% { background-position: 0 0; } 
+            100% { background-position: 0 -40px; } 
+        }
+        
+        /* 模擬冰原預覽 */
+        .preview-ice { 
+            background-color: #bae6fd; 
+            background-image: radial-gradient(circle at center, rgba(255,255,255,0.8) 0%, transparent 60%);
+            box-shadow: inset 0 0 20px rgba(125,211,252,0.8);
+        }
+        
+        /* 模擬岩漿預覽 */
+        .preview-magma {
+            background-color: #450a0a;
+            background-image: radial-gradient(circle at 30% 30%, rgba(220, 38, 38, 0.6) 0%, transparent 50%), radial-gradient(circle at 70% 70%, rgba(239, 68, 68, 0.4) 0%, transparent 50%);
+            box-shadow: inset 0 0 20px rgba(220, 38, 38, 0.8);
+        }
+        
+        .map-name { font-size: 1.3rem; font-weight: 800; color: #38bdf8; margin-bottom: 5px; }
+        .map-desc { font-size: 0.85rem; color: #cbd5e1; line-height: 1.4; height: 40px; }
+
+        .divider { 
+            display: flex; align-items: center; text-align: center; color: #475569; 
+            font-size: 0.8rem; margin: 25px 0; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; 
+        }
+        .divider::before, .divider::after { content: ''; flex: 1; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+        .divider::before { margin-right: 1em; } .divider::after { margin-left: 1em; }
+
+        input[type="text"], select {
+            width: 100%; padding: 14px 18px; margin-bottom: 16px; border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 14px; font-size: 1.05rem; text-align: center; box-sizing: border-box; outline: none;
+            background: rgba(0, 0, 0, 0.4); color: white; transition: all 0.3s; font-weight: 600; letter-spacing: 1px;
+            position: relative; z-index: 2;
+        }
+        input[type="text"]:focus, select:focus { border-color: #38bdf8; box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.15); background: rgba(0,0,0,0.6); }
+        select option { background: #0f172a; }
+
+        .input-group { display: flex; gap: 10px; position: relative; z-index: 2; }
+        .input-group input { margin-bottom: 0; flex: 1; text-align: left; }
+        .input-group button { width: auto; margin-bottom: 0; padding: 0 24px; border-radius: 14px; white-space: nowrap; }
+
+        input[type="color"] {
+            width: 100%; height: 55px; border: none; border-radius: 14px; cursor: pointer;
+            margin-bottom: 25px; background: none; outline: none;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: 2px solid rgba(255, 255, 255, 0.15); border-radius: 12px; transition: border 0.3s; }
+        input[type="color"]:hover::-webkit-color-swatch { border-color: #38bdf8; }
+
+        button {
+            width: 100%; padding: 15px; border: none; border-radius: 14px; font-size: 1.05rem; font-weight: 700; cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); color: white; letter-spacing: 1px;
+            position: relative; z-index: 2;
+        }
+        button:hover:not(:disabled) { transform: translateY(-2px); }
+        button:active:not(:disabled) { transform: translateY(1px); }
+        
+        button.primary { background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%); box-shadow: 0 6px 20px rgba(14, 165, 233, 0.3); }
+        button.primary:hover:not(:disabled) { box-shadow: 0 8px 25px rgba(14, 165, 233, 0.5); }
+        
+        button.secondary { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); box-shadow: 0 6px 20px rgba(99, 102, 241, 0.3); }
+        button.secondary:hover:not(:disabled) { box-shadow: 0 8px 25px rgba(99, 102, 241, 0.5); }
+        
+        button.success { background: linear-gradient(135deg, #10b981 0%, #34d399 100%); box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3); }
+        button.success:hover:not(:disabled) { box-shadow: 0 8px 25px rgba(16, 185, 129, 0.5); }
+        
+        button.danger { background: linear-gradient(135deg, #ef4444 0%, #f43f5e 100%); box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3); }
+        button.danger:hover:not(:disabled) { box-shadow: 0 8px 25px rgba(239, 68, 68, 0.5); }
+
+        button:disabled { background: #334155; color: #64748b; box-shadow: none; cursor: not-allowed; }
+
+        .hidden { display: none !important; }
+
+        #settings-btn {
+            position: absolute; top: 25px; left: 25px; background: transparent; border: none;
+            cursor: pointer; display: none; font-size: 2.2rem; text-align: center;
+            z-index: 20; transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            text-shadow: 0 4px 10px rgba(0,0,0,0.5); user-select: none;
+        }
+        #settings-btn:hover { transform: scale(1.15) rotate(90deg); }
+
+        #settings-overlay {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(2, 6, 23, 0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 30; opacity: 0; pointer-events: none; transition: opacity 0.3s;
+        }
+        #settings-overlay.active { opacity: 1; pointer-events: auto; }
+
+        input[type="range"] { width: 100%; margin: 10px 0 25px 0; cursor: pointer; accent-color: #38bdf8; height: 6px; border-radius: 3px; }
+        .control-label { text-align: left; margin-bottom: 8px; color: #cbd5e1; font-size: 0.95rem; font-weight: 600; display: flex; justify-content: space-between; }
+
+        #leaderboard {
+            position: absolute; top: 80px; right: 20px;
+            background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.08); border-radius: 16px;
+            padding: 18px; color: white; width: 220px; z-index: 15;
+            display: none; box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+        }
+        #leaderboard h3 {
+            margin: 0 0 12px 0; font-size: 1.05rem; text-align: center;
+            color: #38bdf8; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 10px; letter-spacing: 2px; text-transform: uppercase;
+        }
+        .leaderboard-item {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 10px; font-size: 0.95rem; font-weight: 600; padding: 4px 6px; border-radius: 8px; transition: background 0.2s;
+        }
+        .player-info { display: flex; align-items: center; gap: 8px; }
+        .player-color-dot {
+            width: 12px; height: 12px; border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.8); display: inline-block;
+        }
+        .player-score { color: #fcd34d; font-weight: bold; font-family: 'Courier New', monospace; font-size: 1.1rem; }
+
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 8px; height: 8px; background: rgba(255,255,255,0.9); border-radius: 50%;
+            z-index: 5; pointer-events: none; display: none; box-shadow: 0 0 8px rgba(0,0,0,0.8);
+        }
+
+        #instruction { 
+            position: absolute; top: 30px; width: 100%; text-align: center; color: white; z-index: 5; 
+            text-shadow: 0 2px 5px rgba(0,0,0,0.9); pointer-events: none; transition: all 0.3s ease;
+            font-weight: 600; font-size: 1.05rem; letter-spacing: 1px; padding: 0 20px; box-sizing: border-box;
+        }
+        
+        #conveyor-warning {
+            position: absolute; top: 70px; width: 100%; text-align: center; color: #ef4444; z-index: 5;
+            font-weight: 800; font-size: 1.5rem; text-shadow: 0 2px 10px rgba(0,0,0,0.9);
+            display: none; animation: pulse 0.5s infinite; letter-spacing: 2px;
+        }
+
+        #name-tags-container {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            pointer-events: none; overflow: hidden; z-index: 4; display: none;
+        }
+        
+        .name-tag {
+            position: absolute; color: white; background: rgba(15, 23, 42, 0.6);
+            padding: 4px 10px; border-radius: 8px; font-size: 14px; font-weight: 700; letter-spacing: 0.5px;
+            transform: translate(-50%, -50%); 
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8); transition: opacity 0.1s;
+            border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(4px); box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            white-space: nowrap;
+        }
+
+        #touch-controls {
+            position: absolute; bottom: 30px; left: 0; width: 100%;
+            display: none; justify-content: space-between; padding: 0 30px;
+            box-sizing: border-box; z-index: 15; pointer-events: none;
+        }
+        .touch-btn {
+            width: 75px; height: 75px; border-radius: 50%;
+            background: rgba(15, 23, 42, 0.6); border: 2px solid rgba(255, 255, 255, 0.2);
+            color: white; font-weight: 800; font-size: 1.1rem;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.3); pointer-events: auto;
+            backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            user-select: none; -webkit-user-select: none;
+            transition: background 0.1s, transform 0.1s;
+        }
+        .touch-btn:active, .touch-btn.active {
+            background: rgba(56, 189, 248, 0.5); border-color: #38bdf8;
+            transform: scale(0.9);
+        }
+
+        #toast-container {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+        }
+        .toast {
+            background: rgba(220, 38, 38, 0.95); color: white; padding: 14px 28px;
+            border-radius: 12px; font-weight: 700; font-size: 1.05rem; letter-spacing: 1px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            opacity: 0; transform: translateY(-20px) scale(0.9); text-align: center; 
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .toast.show { opacity: 1; transform: translateY(0) scale(1); }
+        .toast.success { background: rgba(16, 185, 129, 0.95); }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-6px); }
+            40%, 80% { transform: translateX(6px); }
+        }
+        .shake-error { animation: shake 0.4s; border-color: #ef4444 !important; box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2) !important; }
+    </style>
+</head>
+<body>
+
+    <div id="toast-container"></div>
+
+    <div id="connection-status">
+        <span id="status-light" class="status-dot connecting"></span>
+        <span id="status-text">連線中...</span>
+    </div>
+
+    <div id="settings-btn" title="設定 (ESC)">⚙️</div>
+
+    <div id="leaderboard">
+        <h3>🏆 排行榜</h3>
+        <div id="leaderboard-list"></div>
+    </div>
+
+    <div id="name-tags-container"></div>
+
+    <div id="crosshair"></div>
+    <div id="instruction" class="hidden">點擊畫面鎖定視角 | WASD 移動 | 空白鍵 跳躍 | Shift 鍵 衝刺</div>
+    <div id="conveyor-warning">⚠️ 推力方向即將改變 ⚠️</div>
+    <div id="reverse-indicator" style="display: none; position: absolute; top: 120px; left: 50%; transform: translateX(-50%); background: rgba(239, 68, 68, 0.8); color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold; pointer-events: none; z-index: 10;">⚠️ 方向反轉 ⚠️</div>
+
+    <div id="touch-controls">
+        <div id="touch-dash-btn" class="touch-btn">⚡ 衝刺</div>
+        <div id="touch-jump-btn" class="touch-btn">🚀 跳躍</div>
+    </div>
+
+    <div id="ui-layer">
+        <!-- 主選單 -->
+        <div id="main-menu-panel" class="panel">
+            <div>
+                <h1 class="game-title">Sphere War</h1>
+                <div class="game-subtitle">3D Arena Survival</div>
+            </div>
+
+            <div class="menu-grid">
+                <div class="menu-card">
+                    <h3>🌐 多人連線模式</h3>
+                    <p>建立專屬房間或加入朋友的戰局，與真人較量。</p>
+                    <button id="btn-show-multiplayer" class="primary">進入多人模式</button>
+                </div>
+
+                <div class="menu-card">
+                    <h3>💻 單人離線模式</h3>
+                    <p>離線與 AI 機器人進行大亂鬥，鍛鍊你的技巧。</p>
+                    <button id="btn-show-singleplayer" class="success">進入單人模式</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 地圖選擇面板 -->
+        <div id="map-select-panel" class="panel hidden">
+            <h1 class="game-title" style="font-size: 2.2rem;">選擇地圖</h1>
+            <div class="game-subtitle" style="margin-bottom: 20px;">Select Map</div>
+            
+            <div class="map-display">
+                <div class="map-preview-container">
+                    <button id="btn-prev-map" class="map-btn">◀</button>
+                    <div id="map-preview-ui" class="map-preview-box preview-normal"></div>
+                    <button id="btn-next-map" class="map-btn">▶</button>
+                </div>
+                <div id="map-name-ui" class="map-name">一般地圖</div>
+                <div id="map-desc-ui" class="map-desc">標準的競技場地，沒有額外的干擾，純粹的實力對決。</div>
+            </div>
+
+            <div class="menu-grid" style="margin-top: 25px;">
+                <button id="btn-map-next" class="success">確認地圖</button>
+                <button id="btn-map-back" class="danger">返回</button>
+            </div>
+        </div>
+
+        <!-- 多人選單 -->
+        <div id="multiplayer-panel" class="panel hidden">
+            <h1 class="game-title" style="font-size: 2.2rem;">多人連線</h1>
+            <div class="game-subtitle" style="margin-bottom: 15px;">Multiplayer</div>
+            <div class="recommend-badge" style="margin-bottom: 20px; padding: 4px 12px; font-size: 0.8rem; color: #facc15;">💡 推薦 10 人以下最佳體驗</div>
+
+            <div class="menu-grid">
+                <div class="menu-card" style="padding: 18px;">
+                    <h3 style="font-size: 1.15rem;">建立戰場</h3>
+                    <p style="font-size: 0.85rem; margin-bottom: 12px;">開啟專屬的連線房間，邀請朋友一起遊玩。</p>
+                    <button id="btn-create-room" class="primary" disabled style="padding: 10px;">創建房間</button>
+                </div>
+
+                <div class="menu-card" style="padding: 18px;">
+                    <h3 style="font-size: 1.15rem;">加入戰場</h3>
+                    <p style="font-size: 0.85rem; margin-bottom: 12px;">輸入朋友提供的 6 碼代碼，立刻加入戰局。</p>
+                    <div class="input-group">
+                        <input type="text" id="room-input" placeholder="輸入代碼" maxlength="6" style="padding: 10px; font-size: 1rem;">
+                        <button id="btn-join-room" class="secondary" disabled style="padding: 10px 18px;">加入</button>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="btn-mp-back" class="danger" style="margin-top: 15px; padding: 12px;">返回主選單</button>
+        </div>
+
+        <!-- 多人房間設定面板 -->
+        <div id="mp-settings-panel" class="panel hidden">
+            <h1 class="game-title" style="font-size: 2.2rem;">房間設定</h1>
+            <div class="game-subtitle" style="margin-bottom: 20px;">Room Settings</div>
+            
+            <div class="control-label"><span>地圖大小</span><span id="mp-map-size-val">800</span></div>
+            <input type="range" id="mp-map-size-slider" min="400" max="2000" step="100" value="800">
+
+            <div class="control-label"><span>能量點數量</span><span id="mp-pellet-count-val">50</span></div>
+            <input type="range" id="mp-pellet-count-slider" min="10" max="200" value="50">
+
+            <div class="control-label"><span>尖刺數量</span><span id="mp-spike-count-val">15</span></div>
+            <input type="range" id="mp-spike-count-slider" min="0" max="150" value="15">
+            
+            <div class="control-label"><span>尖刺扣除體積 (%)</span><span id="mp-spike-damage-val">20</span></div>
+            <input type="range" id="mp-spike-damage-slider" min="0" max="100" step="5" value="20">
+
+            <div class="control-label"><span>加速帶數量</span><span id="mp-boost-count-val">8</span></div>
+            <input type="range" id="mp-boost-count-slider" min="0" max="60" value="8">
+
+            <div class="control-label"><span>加速帶推力</span><span id="mp-boost-power-val">45</span></div>
+            <input type="range" id="mp-boost-power-slider" min="10" max="150" step="5" value="45">
+            
+            <div class="control-label"><span>基礎衝擊力</span><span id="mp-base-force-val">15</span></div>
+            <input type="range" id="mp-base-force-slider" min="5" max="50" value="15">
+            
+            <div class="control-label"><span>全域操作反向 (所有人)</span></div>
+            <select id="mp-global-reverse-select" style="margin-bottom: 20px;">
+                <option value="false">關閉 (正常操作)</option>
+                <option value="true">開啟 (方向完全相反)</option>
+            </select>
+            
+            <div class="conveyor-setting-group" style="display: none;">
+                <div class="control-label"><span>輸送帶推力</span><span id="mp-conveyor-force-val">0.5</span></div>
+                <input type="range" id="mp-conveyor-force-slider" min="0.1" max="5.0" step="0.1" value="0.5">
+                
+                <div class="control-label"><span>切換方向間隔 (秒)</span><span id="mp-conveyor-time-val">30</span></div>
+                <input type="range" id="mp-conveyor-time-slider" min="5" max="60" step="1" value="30">
+            </div>
+
+            <div class="ice-setting-group" style="display: none;">
+                <div class="control-label"><span>冰原滑行程度 (摩擦力)</span><span id="mp-ice-friction-val">0.97</span></div>
+                <input type="range" id="mp-ice-friction-slider" min="0.85" max="0.99" step="0.01" value="0.97">
+            </div>
+            
+            <div class="magma-setting-group" style="display: none;">
+                <div class="control-label"><span>岩漿殘留秒數</span><span id="mp-magma-burn-val">5</span></div>
+                <input type="range" id="mp-magma-burn-slider" min="0" max="15" value="5">
+                
+                <div class="control-label"><span>岩漿池數量</span><span id="mp-magma-count-val">1</span></div>
+                <input type="range" id="mp-magma-count-slider" min="0" max="50" value="1">
+
+                <div class="control-label"><span>岩漿平均大小</span><span id="mp-magma-size-val">100</span></div>
+                <input type="range" id="mp-magma-size-slider" min="20" max="400" step="10" value="100">
+            </div>
+            
+            <div class="menu-grid" style="margin-top: 25px;">
+                <button id="btn-mp-settings-create" class="primary">創建並進入</button>
+                <button id="btn-mp-settings-back" class="danger">重新選擇地圖</button>
+            </div>
+        </div>
+
+        <!-- 外觀設定面板 (共用) -->
+        <div id="color-panel" class="panel hidden">
+            <h1 class="game-title" style="font-size: 2.2rem;">選擇外觀</h1>
+            <div class="game-subtitle" style="margin-bottom: 20px;">Customize</div>
+
+            <div id="room-info-container" style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 25px;">
+                <p id="room-id-display" style="font-size: 1.1rem; color: #94a3b8; font-weight: 700; margin: 0;">房間代碼: </p>
+                <button id="btn-copy-room" style="width: auto; padding: 6px 14px; margin: 0; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); box-shadow: none; border-radius: 8px; font-size: 0.85rem; color: #e2e8f0;">📋 複製</button>
+            </div>
+            
+            <div class="control-label">玩家暱稱</div>
+            <input type="text" id="name-input" placeholder="輸入名稱 (1-8字)" maxlength="8" value="玩家1號">
+            
+            <div class="control-label">代表顏色</div>
+            <input type="color" id="color-input" value="#f43f5e">
+            
+            <div class="menu-grid" style="margin-top: 15px;">
+                <button id="btn-start-game" class="primary">下一步</button>
+                <button id="btn-color-back" class="danger">返回</button>
+            </div>
+        </div>
+
+        <!-- 單人遊戲參數面板 -->
+        <div id="sp-settings-panel" class="panel hidden">
+            <h1 class="game-title" style="font-size: 2.2rem;">單人設定</h1>
+            <div class="game-subtitle" style="margin-bottom: 20px;">Game Rules</div>
+            
+            <div class="control-label"><span>地圖大小</span><span id="map-size-val">800</span></div>
+            <input type="range" id="map-size-slider" min="400" max="2000" step="100" value="800">
+
+            <div class="control-label"><span>能量點數量</span><span id="pellet-count-val">50</span></div>
+            <input type="range" id="pellet-count-slider" min="10" max="200" value="50">
+
+            <div class="control-label"><span>NPC 數量</span><span id="npc-count-val">15</span></div>
+            <input type="range" id="npc-count-slider" min="1" max="50" value="15">
+
+            <div class="control-label"><span>尖刺數量</span><span id="spike-count-val">15</span></div>
+            <input type="range" id="spike-count-slider" min="0" max="150" value="15">
+            
+            <div class="control-label"><span>尖刺扣除體積 (%)</span><span id="spike-damage-val">20</span></div>
+            <input type="range" id="spike-damage-slider" min="0" max="100" step="5" value="20">
+
+            <div class="control-label"><span>加速帶數量</span><span id="boost-count-val">8</span></div>
+            <input type="range" id="boost-count-slider" min="0" max="60" value="8">
+
+            <div class="control-label"><span>加速帶推力</span><span id="boost-power-val">45</span></div>
+            <input type="range" id="boost-power-slider" min="10" max="150" step="5" value="45">
+            
+            <div class="control-label"><span>基礎衝擊力</span><span id="base-force-val">15</span></div>
+            <input type="range" id="base-force-slider" min="5" max="50" value="15">
+            
+            <div class="control-label"><span>全域操作反向 (單機)</span></div>
+            <select id="global-reverse-select" style="margin-bottom: 20px;">
+                <option value="false">關閉 (正常操作)</option>
+                <option value="true">開啟 (方向完全相反)</option>
+            </select>
+            
+            <div class="conveyor-setting-group" style="display: none;">
+                <div class="control-label"><span>輸送帶推力</span><span id="conveyor-force-val">0.5</span></div>
+                <input type="range" id="conveyor-force-slider" min="0.1" max="5.0" step="0.1" value="0.5">
+                
+                <div class="control-label"><span>切換方向間隔 (秒)</span><span id="conveyor-time-val">30</span></div>
+                <input type="range" id="conveyor-time-slider" min="5" max="60" step="1" value="30">
+            </div>
+
+            <div class="ice-setting-group" style="display: none;">
+                <div class="control-label"><span>冰原滑行程度 (摩擦力)</span><span id="ice-friction-val">0.97</span></div>
+                <input type="range" id="ice-friction-slider" min="0.85" max="0.99" step="0.01" value="0.97">
+            </div>
+
+            <div class="magma-setting-group" style="display: none;">
+                <div class="control-label"><span>岩漿殘留秒數</span><span id="magma-burn-val">5</span></div>
+                <input type="range" id="magma-burn-slider" min="0" max="15" value="5">
+                
+                <div class="control-label"><span>岩漿池數量</span><span id="magma-count-val">1</span></div>
+                <input type="range" id="magma-count-slider" min="0" max="50" value="1">
+
+                <div class="control-label"><span>岩漿平均大小</span><span id="magma-size-val">100</span></div>
+                <input type="range" id="magma-size-slider" min="20" max="400" step="10" value="100">
+            </div>
+            
+            <div class="control-label">NPC 難度 (AI)</div>
+            <select id="npc-difficulty-select">
+                <option value="1">簡單 (隨機漫步)</option>
+                <option value="2" selected>普通 (會主動吃食物，接近會圍剿第一名)</option>
+                <option value="3">困難 (主動狂暴圍剿第一名且會使用衝刺撞擊)</option>
+            </select>
+            
+            <div class="menu-grid" style="margin-top: 15px;">
+                <button id="btn-sp-settings-next" class="success">下一步</button>
+                <button id="btn-sp-settings-back" class="danger">重新選擇地圖</button>
+            </div>
+        </div>
+
+        <!-- 教學面板 -->
+        <div id="tutorial-panel" class="panel hidden">
+            <h1 class="game-title" style="font-size: 2.2rem;">玩法介紹</h1>
+            <div class="game-subtitle" style="margin-bottom: 20px;">How to play</div>
+
+            <div class="menu-card" style="margin-bottom: 25px; max-height: 40vh; overflow-y: auto;">
+                <h3 style="color: #38bdf8;">🎯 目標與規則</h3>
+                <p>🟢 <b>成長：</b>收集藍色光點變大。體積越大速度越慢，但更重難以被擊退。<br>
+                   💥 <b>碰撞：</b>體型大於對手 10% 即可將其撞開！<br>
+                   ⚔️ <b>反擊：</b>小球使用「衝刺」撞擊沒衝刺的大球，也能產生衝擊力將大球推開！<br>
+                   🔵 <b>加速帶：</b>踏上藍色光陣會瞬間向前強烈衝刺，期間撞擊力大幅提升！<br>
+                   🔴 <b>紅刺：</b>實體障礙物。撞到紅色尖刺會<b>瞬間損失 20% 能量</b>並被強烈彈開！<br>
+                   ⚡ <b>衝刺：</b>按 <b>Shift</b> / <b>右鍵</b> 加速。體積越大衝刺消耗越快。<br>
+                   🔄 <b>地圖特效：</b>若選擇「輸送帶地圖」，地板每30秒改變推力方向，順向加速、逆向減速！
+                </p>
+                <div class="divider" style="margin: 15px 0;">操作</div>
+                
+                <h3 style="color: #38bdf8;">🎮 操作方式</h3>
+                <p style="margin-bottom: 0;">🖱️ <b>滑鼠移動：</b>轉動視角 &nbsp;|&nbsp; 🖱️ <b>滑鼠右鍵：</b>衝刺<br>
+                   ⌨️ <b>W A S D：</b>移動 &nbsp;|&nbsp; 🚀 <b>空白鍵：</b>跳躍<br>
+                   ⚡ <b>Shift 鍵：</b>衝刺 &nbsp;|&nbsp; ⚙️ <b>ESC：</b>開啟設定</p>
+            </div>
+            <button id="btn-confirm-start" class="success">我準備好了！</button>
+        </div>
+    </div>
+
+    <!-- 遊戲中暫停設定 -->
+    <div id="settings-overlay">
+        <div class="panel">
+            <h2 class="game-title" style="font-size: 2.2rem; margin-bottom: 10px;">設定</h2>
+            <div class="game-subtitle" style="margin-bottom: 20px;">Settings</div>
+            
+            <div class="menu-card" style="margin-bottom: 25px;">
+                <div class="control-label">滑鼠靈敏度: <span id="sensitivity-value">50</span>%</div>
+                <input type="range" id="sensitivity-slider" min="1" max="100" value="50">
+            </div>
+
+            <div class="menu-grid">
+                <button id="btn-resume-game" class="primary">繼續遊戲</button>
+                <button id="btn-leave-game" class="danger">退出戰場</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // --- 輔助函數 ---
+        function showToast(message, isSuccess = false) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            if (isSuccess) toast.classList.add('success');
+            toast.innerText = message;
+            container.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.add('show'));
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function highlightInputError(inputId) {
+            const input = document.getElementById(inputId);
+            input.classList.remove('shake-error');
+            void input.offsetWidth; 
+            input.classList.add('shake-error');
+            setTimeout(() => input.classList.remove('shake-error'), 400);
+        }
+
+        const backendUrl = 'https://sphere-war.onrender.com';
+        const socket = io(backendUrl, { autoConnect: true });
+
+        // --- 地圖系統設計 ---
+        const MapTypes = [
+            { id: 'normal', name: '一般地圖', desc: '標準的競技場地，沒有額外的干擾，純粹的實力對決。', class: 'preview-normal' },
+            { id: 'conveyor', name: '向量推力', desc: '地板為持續運作的區域推力場！每30秒改變推力方向。順著箭頭可疊加移動速度，逆著箭頭則會產生強烈阻力。', class: 'preview-conveyor' },
+            { id: 'ice', name: '冰原滑行', desc: '極度光滑的冰面，移動具有極大的慣性！在冰面上難以煞車，加速帶與衝刺也會讓你滑行得更遠。', class: 'preview-ice' },
+            { id: 'magma', name: '岩漿煉獄', desc: '危險的岩漿地形，踏入會使移動變慢且無法衝刺，並且持續燃燒體力直到剩下基礎大小。離開後燃燒仍會持續！', class: 'preview-magma' }
+        ];
+        let currentMapSelectIndex = 0;
+        let selectedMapType = 'normal';
+
+        // 向量推力變數
+        const conveyorDirections = [
+            { x: 1, z: 0, rot: -Math.PI/2 },   // 0: Right
+            { x: 0, z: 1, rot: Math.PI },      // 1: Down
+            { x: -1, z: 0, rot: Math.PI/2 },   // 2: Left
+            { x: 0, z: -1, rot: 0 }            // 3: Up
+        ];
+        let currentConveyorDirIndex = 0;
+        let lastConveyorSwitchTime = 0;
+        let conveyorIsWarning = false;
+        const CONVEYOR_CYCLE_MS = 30000;
+        const CONVEYOR_FORCE = 4.5;
+
+        // --- Three.js 初始化 ---
+        const canvas = document.getElementById('gameCanvas');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0f172a); 
+        scene.fog = new THREE.Fog(0x0f172a, 400, 2500);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+        hemiLight.position.set(0, 200, 0);
+        scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(100, 200, 50);
+        dirLight.castShadow = true;
+        dirLight.shadow.camera.top = 400;
+        dirLight.shadow.camera.bottom = -400;
+        dirLight.shadow.camera.left = -400;
+        dirLight.shadow.camera.right = 400;
+        scene.add(dirLight);
+
+        let worldSize = 800;
+        
+        // 生成一般地板材質
+        const normalGroundMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
+        
+        // 生成冰原材質
+        const iceGroundMat = new THREE.MeshStandardMaterial({ color: 0xbae6fd, roughness: 0.1, metalness: 0.4, transparent: true, opacity: 0.9 });
+        
+        // 生成岩漿地板材質 (較暗)
+        const magmaGroundMat = new THREE.MeshStandardMaterial({ color: 0x1a0f0f, roughness: 0.9 });
+        
+        // 生成岩漿區域材質與幾何體
+        const magmaGeo = new THREE.CylinderGeometry(1, 1, 1, 32); 
+        const magmaMat = new THREE.MeshStandardMaterial({ color: 0xff0000, transparent: true, opacity: 0.5, emissive: 0xff0000, emissiveIntensity: 0.5 });
+        
+        // 動態生成輸送帶箭頭貼圖
+        const arrowTexCanvas = document.createElement('canvas');
+        arrowTexCanvas.width = 256; arrowTexCanvas.height = 256;
+        const actx = arrowTexCanvas.getContext('2d');
+        actx.fillStyle = '#0f766e'; // 背景色
+        actx.fillRect(0, 0, 256, 256);
+        actx.fillStyle = '#14b8a6'; // 箭頭顏色
+        actx.beginPath();
+        // 畫一個朝上的箭頭 (rot=0 時朝上)
+        actx.moveTo(128, 40);
+        actx.lineTo(200, 140);
+        actx.lineTo(160, 140);
+        actx.lineTo(160, 220);
+        actx.lineTo(96, 220);
+        actx.lineTo(96, 140);
+        actx.lineTo(56, 140);
+        actx.closePath();
+        actx.fill();
+        const conveyorPattern = new THREE.CanvasTexture(arrowTexCanvas);
+        conveyorPattern.wrapS = THREE.RepeatWrapping; conveyorPattern.wrapT = THREE.RepeatWrapping;
+        // 材質設定
+        const conveyorGroundMat = new THREE.MeshStandardMaterial({ 
+            color: 0xffffff, roughness: 0.6, map: conveyorPattern 
+        });
+
+        let ground = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), normalGroundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        let gridHelper = new THREE.GridHelper(1600, 60, 0x334155, 0x1e293b);
+        gridHelper.position.y = 0.1;
+        scene.add(gridHelper);
+
+        function updateWorldSize(size, mapType = 'normal') {
+            selectedMapType = mapType;
+            if (ground) {
+                ground.geometry.dispose();
+                ground.geometry = new THREE.PlaneGeometry(size * 2, size * 2);
+                
+                // 根據地圖類型切換材質
+                if (mapType === 'conveyor') {
+                    ground.material = conveyorGroundMat;
+                    conveyorPattern.repeat.set(size / 100, size / 100);
+                    conveyorGroundMat.map.rotation = conveyorDirections[currentConveyorDirIndex].rot;
+                    // 因為旋轉了，中心點偏移設定
+                    conveyorGroundMat.map.center.set(0.5, 0.5);
+                } else if (mapType === 'ice') {
+                    ground.material = iceGroundMat;
+                } else if (mapType === 'magma') {
+                    ground.material = magmaGroundMat;
+                } else {
+                    ground.material = normalGroundMat;
+                }
+            }
+            if (gridHelper) {
+                scene.remove(gridHelper);
+                gridHelper.geometry.dispose();
+                gridHelper.material.dispose();
+            }
+            if (mapType === 'normal') {
+                const divisions = Math.max(10, Math.floor(size / 13)); 
+                gridHelper = new THREE.GridHelper(size * 2, divisions, 0x334155, 0x1e293b);
+                gridHelper.position.y = 0.1;
+                scene.add(gridHelper);
+            } else if (mapType === 'ice') {
+                const divisions = Math.max(10, Math.floor(size / 20)); 
+                gridHelper = new THREE.GridHelper(size * 2, divisions, 0xffffff, 0x7dd3fc);
+                gridHelper.material.opacity = 0.3;
+                gridHelper.material.transparent = true;
+                gridHelper.position.y = 0.1;
+                scene.add(gridHelper);
+            } else if (mapType === 'magma') {
+                const divisions = Math.max(10, Math.floor(size / 13)); 
+                gridHelper = new THREE.GridHelper(size * 2, divisions, 0x450a0a, 0x1a0505);
+                gridHelper.position.y = 0.1;
+                scene.add(gridHelper);
+            }
+        }
+
+        // 動態生成球體紋理
+        const ballTexCanvas = document.createElement('canvas');
+        ballTexCanvas.width = 512; ballTexCanvas.height = 512;
+        const ctx = ballTexCanvas.getContext('2d');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 512, 512);
+        ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 12;
+        ctx.beginPath();
+        for(let i=0; i<=512; i+=64) {
+            ctx.moveTo(i, 0); ctx.lineTo(i, 512);
+            ctx.moveTo(0, i); ctx.lineTo(512, i);
+        }
+        ctx.stroke();
+        ctx.fillStyle = '#475569';
+        for(let i=0; i<=512; i+=64) {
+            for(let j=0; j<=512; j+=64) {
+                ctx.beginPath(); ctx.arc(i, j, 8, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+        const ballPattern = new THREE.CanvasTexture(ballTexCanvas);
+        ballPattern.wrapS = THREE.RepeatWrapping; ballPattern.wrapT = THREE.RepeatWrapping;
+        ballPattern.repeat.set(4, 2); 
+
+        const baseSphereGeo = new THREE.SphereGeometry(1, 32, 32); 
+        const pelletGeo = new THREE.SphereGeometry(1, 8, 8);       
+        const pelletMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+        const spikeGeo = new THREE.ConeGeometry(15, 40, 16);
+        const spikeMat = new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.4, metalness: 0.5 });
+        const boostPadGeo = new THREE.CylinderGeometry(25, 25, 1, 32);
+        const boostPadMat = new THREE.MeshStandardMaterial({ 
+            color: 0x06b6d4, emissive: 0x06b6d4, emissiveIntensity: 0.6, transparent: true, opacity: 0.8 
+        });
+
+        // --- 狀態管理 ---
+        const SPIKE_RADIUS = 15; 
+        let gameState = { players: {}, pellets: [], spikes: [], boostPads: [], magmas: [] };
+        const meshes = { players: {}, pellets: [], spikes: [], boostPads: [], magmas: [] };
+        const nameTagsDOM = {}; 
+
+        let yaw = 0, pitch = 0; 
+        const keys = { w: false, a: false, s: false, d: false, ' ': false, shift: false };
+        let mouseRightClickDash = false;
+        let justJumped = false;
+        let isTouchDashing = false;
+
+        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+        function singlePlayerLoop() {
+            let players = localGameState.players;
+            let pellets = localGameState.pellets;
+            let spikes = localGameState.spikes;
+            let boostPads = localGameState.boostPads;
+            let difficultyLevel = parseInt(document.getElementById('npc-difficulty-select').value);
+            let now = Date.now();
+
+            // 處理向量推力地圖的邏輯
+            let currentConveyorForce = { x: 0, z: 0 };
+            if (selectedMapType === 'conveyor') {
+                let switchMs = (localGameState.conveyorSwitchTime || 30) * 1000;
+                if (now - lastConveyorSwitchTime >= switchMs) {
+                    // 切換方向，確保不和當前方向相同
+                    let nextDir;
+                    do { nextDir = Math.floor(Math.random() * 4); } while (nextDir === currentConveyorDirIndex);
+                    currentConveyorDirIndex = nextDir;
+                    lastConveyorSwitchTime = now;
+                    conveyorIsWarning = false;
+                    document.getElementById('conveyor-warning').style.display = 'none';
+                } else if (now - lastConveyorSwitchTime >= switchMs - 3000) {
+                    // 切換前3秒發出預警
+                    if (!conveyorIsWarning) {
+                        conveyorIsWarning = true;
+                        document.getElementById('conveyor-warning').style.display = 'block';
+                    }
+                }
+                
+                let dirObj = conveyorDirections[currentConveyorDirIndex];
+                let conveyorForce = localGameState.conveyorForce || 0.5;
+                currentConveyorForce.x = dirObj.x * conveyorForce;
+                currentConveyorForce.z = dirObj.z * conveyorForce;
+            }
+
+            let leaderId = null;
+            let maxRadius = -Infinity;
+            for (let id in players) {
+                if (players[id].radius > maxRadius) {
+                    maxRadius = players[id].radius;
+                    leaderId = id;
+                }
+            }
+
+            // AI 控制
+            for (let id in players) {
+                if (id === myId) continue; 
+                let p = players[id];
+                let targetX = null, targetZ = null;
+                let wantsToDash = false;
+
+                let closestPellet = null;
+                let minPelletDist = Infinity;
+                for(let i=0; i<pellets.length; i++) {
+                    let d = Math.hypot(p.x - pellets[i].x, p.z - pellets[i].z);
+                    if (d < minPelletDist) { minPelletDist = d; closestPellet = pellets[i]; }
+                }
+
+                if (leaderId && id !== leaderId) {
+                    let leader = players[leaderId];
+                    let distToLeader = Math.hypot(p.x - leader.x, p.z - leader.z);
+                    let gangUpProb = (difficultyLevel === 3) ? 0.85 : (difficultyLevel === 2 ? 0.50 : 0.15); 
+                    if (Math.random() < gangUpProb || distToLeader < 300) {
+                        targetX = leader.x; targetZ = leader.z;
+                        if (difficultyLevel === 3 && distToLeader < 250 && p.radius > 20) wantsToDash = true;
+                    }
+                }
+
+                let avoidingSpike = false;
+                if (p.radius > 40) {
+                    for(let i=0; i<spikes.length; i++) {
+                        let d = Math.hypot(p.x - spikes[i].x, p.z - spikes[i].z);
+                        if (d < p.radius + 60) {
+                            targetX = p.x + (p.x - spikes[i].x); targetZ = p.z + (p.z - spikes[i].z);
+                            avoidingSpike = true; break;
+                        }
+                    }
+                }
+
+                if (!avoidingSpike && targetX === null && closestPellet) {
+                    targetX = closestPellet.x; targetZ = closestPellet.z;
+                }
+
+                if (targetX !== null && targetZ !== null) {
+                    // AI 需要考慮地板推力的抵抗 (簡單的預測補償)
+                    if (selectedMapType === 'conveyor' && difficultyLevel >= 2) {
+                        targetX -= currentConveyorForce.x * 20;
+                        targetZ -= currentConveyorForce.z * 20;
+                    }
+                    let angle = Math.atan2(targetZ - p.z, targetX - p.x);
+                    if (difficultyLevel === 1) angle += (Math.random() - 0.5) * 0.4; 
+                    p.input.dx = Math.cos(angle); 
+                    p.input.dz = Math.sin(angle);
+                } else {
+                    p.input.dx = 0; p.input.dz = 0;
+                }
+                p.input.dash = wantsToDash;
+                if (p.isGrounded && Math.random() < (difficultyLevel * 0.004)) p.input.jump = true;
+            }
+
+            // 物理與位移
+            for (let id in players) {
+                let p = players[id];
+                p.vx = p.vx || 0; p.vz = p.vz || 0;
+                p.boostCooldown = p.boostCooldown || 0;
+                p.boostEffect = p.boostEffect || 0; p.damageEffect = p.damageEffect || 0;
+                p.magmaBurnTimer = p.magmaBurnTimer || 0;
+                p.inMagma = false;
+
+                if (p.boostCooldown > 0) p.boostCooldown--;
+                if (p.boostEffect > 0) p.boostEffect--;
+                if (p.damageEffect > 0) p.damageEffect--;
+                
+                if (localGameState.magmas) {
+                    for (let i = 0; i < localGameState.magmas.length; i++) {
+                        let m = localGameState.magmas[i];
+                        if (Math.hypot(p.x - m.x, p.z - m.z) < p.radius + m.radius) {
+                            p.inMagma = true;
+                            let burnSecs = parseInt(document.getElementById('magma-burn-slider').value) || 5;
+                            p.magmaBurnTimer = burnSecs * 33; 
+                        }
+                    }
+                }
+                
+                // 加速帶觸發
+                for (let i = 0; i < boostPads.length; i++) {
+                    let pad = boostPads[i];
+                    if (Math.hypot(p.x - pad.x, p.z - pad.z) < p.radius + pad.radius) {
+                        if (p.boostCooldown <= 0) {
+                            let speedDir = Math.hypot(p.input.dx, p.input.dz);
+                            let bx = 0, bz = 0;
+                            if (speedDir > 0) {
+                                bx = (p.input.dx / speedDir); bz = (p.input.dz / speedDir);
+                            } else if (p.vx !== 0 || p.vz !== 0) {
+                                let vDir = Math.hypot(p.vx, p.vz); bx = p.vx / vDir; bz = p.vz / vDir;
+                            } else {
+                                if (id === myId) { bx = -Math.sin(yaw); bz = -Math.cos(yaw); } 
+                                else { let angle = Math.random() * Math.PI * 2; bx = Math.cos(angle); bz = Math.sin(angle); }
+                            }
+                            let bForce = localGameState.boostForce || 45;
+                            p.vx += bx * bForce; 
+                            p.vz += bz * bForce;
+                            p.boostCooldown = 90; p.boostEffect = 15;   
+                        }
+                    }
+                }
+
+                let input = p.input;
+                let isDashing = input.dash && p.radius > 20 && !p.inMagma;
+
+                let sizeFactor = Math.max(0, p.radius - 20); 
+                let baseSpeed = Math.max(3, 8 - Math.sqrt(sizeFactor) * 0.41); 
+                let dashMult = Math.max(1.2, 2.0 - sizeFactor * 0.0053); 
+                let dashCost = 0.05 + sizeFactor * 0.0026;
+                let speed = isDashing ? baseSpeed * dashMult : baseSpeed; 
+                if (p.inMagma) speed *= 0.4;
+
+                if (isDashing) { p.radius -= dashCost; if (p.radius < 20) p.radius = 20; }
+                
+                if (p.magmaBurnTimer > 0) {
+                    p.magmaBurnTimer--;
+                    p.radius -= 1/33;
+                    if (p.radius < 20) p.radius = 20;
+                    p.damageEffect = Math.max(p.damageEffect, 2);
+                }
+
+                let isIce = selectedMapType === 'ice';
+                let baseFriction = 0.85;
+                let iceFriction = localGameState.iceFriction || 0.97;
+                let friction = (isIce && p.isGrounded) ? iceFriction : baseFriction;
+                
+                // 計算基礎玩家移動向量
+                let playerMoveX, playerMoveZ;
+                if (isIce) {
+                    let accelRate = p.isGrounded ? 0.04 : 0.01; 
+                    p.vx += input.dx * (speed * accelRate);
+                    p.vz += input.dz * (speed * accelRate);
+                    playerMoveX = p.vx;
+                    playerMoveZ = p.vz;
+                } else {
+                    playerMoveX = input.dx * speed + p.vx;
+                    playerMoveZ = input.dz * speed + p.vz;
+                }
+                
+                // 結合環境向量推力 (若在空中則受推力影響較小)
+                let environmentForceX = 0;
+                let environmentForceZ = 0;
+                if (selectedMapType === 'conveyor') {
+                    let forceMulti = p.isGrounded ? 1.0 : 0.3; // 空中受力減弱
+                    environmentForceX = currentConveyorForce.x * forceMulti;
+                    environmentForceZ = currentConveyorForce.z * forceMulti;
+                }
+
+                // 物理疊加: 完美詮釋「順向增幅 / 逆向減阻」
+                p.x += playerMoveX + environmentForceX; 
+                p.z += playerMoveZ + environmentForceZ;
+                
+                p.vx *= friction; p.vz *= friction;
+                if (Math.abs(p.vx) < 0.1) p.vx = 0;
+                if (Math.abs(p.vz) < 0.1) p.vz = 0;
+
+                p.vy -= 1.5; p.y += p.vy; p.isGrounded = false;
+                
+                if (Math.abs(p.x) <= worldSize && Math.abs(p.z) <= worldSize) {
+                    if (p.y <= p.radius) { p.y = p.radius; p.vy = 0; p.isGrounded = true; }
+                }
+                
+                if (input.jump && p.isGrounded) { p.vy = 25; p.input.jump = false; }
+            }
+
+            // 吃食物
+            for (let id in players) {
+                let p = players[id];
+                for (let i = pellets.length - 1; i >= 0; i--) {
+                    if (Math.hypot(p.x - pellets[i].x, p.y - pellets[i].y, p.z - pellets[i].z) < p.radius + 15) {
+                        pellets.splice(i, 1); p.radius += 1;
+                        if (localGameState.maxPellets && pellets.length < localGameState.maxPellets) {
+                            pellets.push({ x: (Math.random() - 0.5) * worldSize * 2, y: 4, z: (Math.random() - 0.5) * worldSize * 2 });
+                        }
+                    }
+                }
+            }
+
+            // 尖刺碰撞
+            for (let id in players) {
+                let p = players[id];
+                for (let i = 0; i < spikes.length; i++) {
+                    let spike = spikes[i];
+                    let dist = Math.hypot(p.x - spike.x, p.z - spike.z);
+                    let minDist = p.radius + SPIKE_RADIUS;
+
+                    if (dist < minDist) {
+                        let overlap = minDist - dist;
+                        let nx = dist > 0 ? (p.x - spike.x) / dist : 1;
+                        let nz = dist > 0 ? (p.z - spike.z) / dist : 0;
+                        p.x += nx * overlap; p.z += nz * overlap;
+
+                        if (p.radius > 40) { 
+                            let dmgPercent = localGameState.spikeDamage !== undefined ? localGameState.spikeDamage : 20;
+                            let lostEnergy = (p.radius - 20) * (dmgPercent / 100); 
+                            p.radius -= lostEnergy;
+                            p.vy = 20; p.vx += nx * 35; p.vz += nz * 35;
+                            p.damageEffect = 15;
+
+                            let dropCount = Math.min(30, Math.floor(lostEnergy));
+                            for (let d = 0; d < dropCount; d++) {
+                                let dropAngle = Math.random() * Math.PI * 2;
+                                let dropDist = SPIKE_RADIUS + 10 + Math.random() * 60;
+                                pellets.push({ x: spike.x + Math.cos(dropAngle) * dropDist, y: 4, z: spike.z + Math.sin(dropAngle) * dropDist });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 玩家碰撞推擠
+            let playerIds = Object.keys(players);
+            for (let i = 0; i < playerIds.length; i++) {
+                for (let j = i + 1; j < playerIds.length; j++) {
+                    let p1 = players[playerIds[i]], p2 = players[playerIds[j]];
+                    if (!p1 || !p2) continue;
+
+                    let dx = p1.x - p2.x, dz = p1.z - p2.z;
+                    let dist = Math.hypot(dx, p1.y - p2.y, dz);
+                    let minDist = p1.radius + p2.radius;
+
+                    if (dist < minDist && dist > 0) {
+                        let overlap = minDist - dist;
+                        let hDist = Math.hypot(dx, dz);
+                        let hnx = hDist > 0 ? dx / hDist : 1;
+                        let hnz = hDist > 0 ? dz / hDist : 0;
+
+                        let baseForce1 = localGameState.baseImpactForce || 15; 
+                        let baseForce2 = localGameState.baseImpactForce || 15;
+                        
+                        if (selectedMapType === 'ice') {
+                            baseForce1 += Math.hypot(p1.vx, p1.vz) * 0.8;
+                            baseForce2 += Math.hypot(p2.vx, p2.vz) * 0.8;
+                        }
+
+                        let p1Dashing = p1.input.dash && p1.radius > 20;
+                        let p2Dashing = p2.input.dash && p2.radius > 20;
+
+                        let f1on2 = baseForce1, f2on1 = baseForce2;
+                        let f1Mult = (playerIds[i] === myId) ? 2 : 2.5;
+                        let f2Mult = (playerIds[j] === myId) ? 2 : 2.5;
+
+                        if (p1Dashing && !p2Dashing) f1on2 = baseForce1 * f1Mult; 
+                        else if (p2Dashing && !p1Dashing) f2on1 = baseForce2 * f2Mult;
+                        else if (p1Dashing && p2Dashing) { f1on2 = baseForce1 * 1.5; f2on1 = baseForce2 * 1.5; }
+
+                        if (p1.boostEffect > 0) f1on2 *= 3;
+                        if (p2.boostEffect > 0) f2on1 *= 3;
+
+                        let res1 = Math.max(0.4, 20 / p1.radius);
+                        let res2 = Math.max(0.4, 20 / p2.radius);
+
+                        let totalRadius = p1.radius + p2.radius;
+                        let p1OverlapRatio = p2.radius / totalRadius;
+                        let p2OverlapRatio = p1.radius / totalRadius;
+
+                        p1.x += hnx * overlap * p1OverlapRatio; p1.z += hnz * overlap * p1OverlapRatio;
+                        p2.x -= hnx * overlap * p2OverlapRatio; p2.z -= hnz * overlap * p2OverlapRatio;
+
+                        p1.vx += hnx * (f2on1 * res1); p1.vz += hnz * (f2on1 * res1);
+                        p2.vx -= hnx * (f1on2 * res2); p2.vz -= hnz * (f1on2 * res2);
+                    }
+                }
+            }
+            
+            // 掉落虛空
+            for (let id in players) {
+                let p = players[id];
+                if (p.y + p.radius < 0) {
+                    if (id === myId) showLossMessage('你掉入虛空了！復活中...');
+                    p.x = (Math.random() - 0.5) * worldSize; p.z = (Math.random() - 0.5) * worldSize;
+                    p.y = 100; p.vy = 0; p.vx = 0; p.vz = 0;
+                    p.boostCooldown = 0; p.boostEffect = 0; p.damageEffect = 0; p.radius = 20; 
+                }
+            }
+
+            gameState = localGameState;
+            updateLeaderboard();
+        }
+
+        const uiLayer = document.getElementById('ui-layer');
+        const mainMenuPanel = document.getElementById('main-menu-panel');
+        const mapSelectPanel = document.getElementById('map-select-panel');
+        const multiplayerPanel = document.getElementById('multiplayer-panel');
+        const mpSettingsPanel = document.getElementById('mp-settings-panel');
+        const colorPanel = document.getElementById('color-panel');
+        const spSettingsPanel = document.getElementById('sp-settings-panel');
+        const tutorialPanel = document.getElementById('tutorial-panel');
+        
+        const roomInfoContainer = document.getElementById('room-info-container');
+        const roomIdDisplay = document.getElementById('room-id-display');
+        const btnCopyRoom = document.getElementById('btn-copy-room');
+        const crosshair = document.getElementById('crosshair');
+        const instruction = document.getElementById('instruction');
+        const statusLight = document.getElementById('status-light');
+        const statusText = document.getElementById('status-text');
+        const nameTagsContainer = document.getElementById('name-tags-container');
+        const touchControls = document.getElementById('touch-controls');
+        
+        const settingsOverlay = document.getElementById('settings-overlay');
+        const sensitivitySlider = document.getElementById('sensitivity-slider');
+        const sensitivityValue = document.getElementById('sensitivity-value');
+        
+        let mouseSensitivityMultiplier = 1.0; 
+        const baseSensitivity = 0.002;        
+
+        let currentRoom = null;
+        let myId = null;
+        let isHost = false; 
+        let isPlaying = false;
+        let isSinglePlayer = false;
+        let spGameLoopInterval = null;
+        let localGameState = { players: {}, pellets: [], spikes: [], boostPads: [] };
+
+        socket.on('connect', () => {
+            myId = socket.id;
+            updateStatus('connected', '伺服器已連線');
+            document.getElementById('btn-create-room').disabled = false;
+            document.getElementById('btn-join-room').disabled = false;
+        });
+
+        socket.on('connect_error', () => {
+            updateStatus('disconnected', '伺服器離線 (可玩單人)');
+            document.getElementById('btn-create-room').disabled = true;
+            document.getElementById('btn-join-room').disabled = true;
+        });
+
+        socket.on('disconnect', () => {
+            updateStatus('disconnected', '已斷線');
+            document.getElementById('btn-create-room').disabled = true;
+            document.getElementById('btn-join-room').disabled = true;
+            if (isPlaying && !isSinglePlayer) {
+                showToast('與伺服器失去連線！重新整理中...');
+                setTimeout(() => window.location.reload(), 2000);
+            }
+        });
+
+        function updateStatus(stateClass, text) {
+            statusLight.className = 'status-dot ' + stateClass;
+            statusText.innerText = text;
+        }
+
+        // --- 地圖選擇 UI 事件 ---
+        function renderMapSelectUI() {
+            const map = MapTypes[currentMapSelectIndex];
+            document.getElementById('map-name-ui').innerText = map.name;
+            document.getElementById('map-desc-ui').innerText = map.desc;
+            const previewBox = document.getElementById('map-preview-ui');
+            previewBox.className = 'map-preview-box ' + map.class;
+        }
+
+        document.getElementById('btn-prev-map').onclick = () => {
+            currentMapSelectIndex = (currentMapSelectIndex - 1 + MapTypes.length) % MapTypes.length;
+            renderMapSelectUI();
+        };
+
+        document.getElementById('btn-next-map').onclick = () => {
+            currentMapSelectIndex = (currentMapSelectIndex + 1) % MapTypes.length;
+            renderMapSelectUI();
+        };
+
+        // --- 面板切換事件 ---
+        document.getElementById('btn-show-multiplayer').onclick = () => {
+            mainMenuPanel.classList.add('hidden');
+            multiplayerPanel.classList.remove('hidden');
+        };
+
+        document.getElementById('btn-mp-back').onclick = () => {
+            multiplayerPanel.classList.add('hidden');
+            mainMenuPanel.classList.remove('hidden');
+        };
+
+        // 單人模式進入 -> 先選地圖
+        document.getElementById('btn-show-singleplayer').onclick = () => {
+            isSinglePlayer = true;
+            mainMenuPanel.classList.add('hidden');
+            mapSelectPanel.classList.remove('hidden');
+            roomInfoContainer.style.display = 'none'; 
+            renderMapSelectUI();
+        };
+
+        // 多人模式創建房間 -> 先選地圖
+        document.getElementById('btn-create-room').onclick = () => { 
+            isSinglePlayer = false;
+            multiplayerPanel.classList.add('hidden');
+            mapSelectPanel.classList.remove('hidden');
+            renderMapSelectUI();
+        };
+
+        // 確認地圖後的分流
+        document.getElementById('btn-map-next').onclick = () => {
+            mapSelectPanel.classList.add('hidden');
+            selectedMapType = MapTypes[currentMapSelectIndex].id;
+            
+            document.querySelectorAll('.magma-setting-group').forEach(el => el.style.display = selectedMapType === 'magma' ? 'block' : 'none');
+            document.querySelectorAll('.conveyor-setting-group').forEach(el => el.style.display = selectedMapType === 'conveyor' ? 'block' : 'none');
+            document.querySelectorAll('.ice-setting-group').forEach(el => el.style.display = selectedMapType === 'ice' ? 'block' : 'none');
+            
+            if (selectedMapType === 'ice') {
+                document.getElementById('boost-power-slider').value = 18;
+                document.getElementById('boost-power-val').innerText = '18';
+                document.getElementById('mp-boost-power-slider').value = 18;
+                document.getElementById('mp-boost-power-val').innerText = '18';
+            } else {
+                document.getElementById('boost-power-slider').value = 45;
+                document.getElementById('boost-power-val').innerText = '45';
+                document.getElementById('mp-boost-power-slider').value = 45;
+                document.getElementById('mp-boost-power-val').innerText = '45';
+            }
+
+            if (isSinglePlayer) {
+                spSettingsPanel.classList.remove('hidden');
+            } else {
+                mpSettingsPanel.classList.remove('hidden');
+            }
+        };
+
+        document.getElementById('btn-map-back').onclick = () => {
+            mapSelectPanel.classList.add('hidden');
+            if (isSinglePlayer) {
+                mainMenuPanel.classList.remove('hidden');
+            } else {
+                multiplayerPanel.classList.remove('hidden');
+            }
+        };
+
+        // 外觀設定 -> 下一步
+        document.getElementById('btn-start-game').onclick = () => {
+            const nameInput = document.getElementById('name-input');
+            const name = nameInput.value.trim();
+            const color = document.getElementById('color-input').value;
+            
+            if (!name) {
+                highlightInputError('name-input');
+                return showToast('請先輸入您的玩家暱稱！');
+            }
+            
+            if (isSinglePlayer) {
+                colorPanel.classList.add('hidden');
+                tutorialPanel.classList.remove('hidden'); 
+            } else {
+                socket.emit('check_availability', { roomId: currentRoom, color: color, name: name });
+            }
+        };
+
+        // 外觀設定 -> 返回
+        document.getElementById('btn-color-back').onclick = () => {
+            colorPanel.classList.add('hidden');
+            if (isSinglePlayer) {
+                spSettingsPanel.classList.remove('hidden'); 
+            } else {
+                socket.emit('leave_room'); 
+                if (isHost) {
+                    mpSettingsPanel.classList.remove('hidden'); 
+                } else {
+                    multiplayerPanel.classList.remove('hidden'); 
+                }
+            }
+        };
+
+        // 單人參數滑塊連動
+        const mapSizeSlider = document.getElementById('map-size-slider');
+        const mapSizeVal = document.getElementById('map-size-val');
+        mapSizeSlider.oninput = (e) => mapSizeVal.innerText = e.target.value;
+
+        const npcCountSlider = document.getElementById('npc-count-slider');
+        const npcCountVal = document.getElementById('npc-count-val');
+        npcCountSlider.oninput = (e) => npcCountVal.innerText = e.target.value;
+
+        const pelletCountSlider = document.getElementById('pellet-count-slider');
+        const pelletCountVal = document.getElementById('pellet-count-val');
+        pelletCountSlider.oninput = (e) => pelletCountVal.innerText = e.target.value;
+
+        const spikeCountSlider = document.getElementById('spike-count-slider');
+        const spikeCountVal = document.getElementById('spike-count-val');
+        spikeCountSlider.oninput = (e) => spikeCountVal.innerText = e.target.value;
+
+        const spikeDamageSlider = document.getElementById('spike-damage-slider');
+        const spikeDamageVal = document.getElementById('spike-damage-val');
+        if (spikeDamageSlider) spikeDamageSlider.oninput = (e) => spikeDamageVal.innerText = e.target.value;
+
+        const baseForceSlider = document.getElementById('base-force-slider');
+        const baseForceVal = document.getElementById('base-force-val');
+        baseForceSlider.oninput = (e) => baseForceVal.innerText = e.target.value;
+
+        const boostCountSlider = document.getElementById('boost-count-slider');
+        const boostCountVal = document.getElementById('boost-count-val');
+        boostCountSlider.oninput = (e) => boostCountVal.innerText = e.target.value;
+
+        const boostPowerSlider = document.getElementById('boost-power-slider');
+        const boostPowerVal = document.getElementById('boost-power-val');
+        if (boostPowerSlider) boostPowerSlider.oninput = (e) => boostPowerVal.innerText = e.target.value;
+
+        const magmaBurnSlider = document.getElementById('magma-burn-slider');
+        const magmaBurnVal = document.getElementById('magma-burn-val');
+        magmaBurnSlider.oninput = (e) => magmaBurnVal.innerText = e.target.value;
+
+        const magmaCountSlider = document.getElementById('magma-count-slider');
+        const magmaCountVal = document.getElementById('magma-count-val');
+        magmaCountSlider.oninput = (e) => magmaCountVal.innerText = e.target.value;
+
+        const magmaSizeSlider = document.getElementById('magma-size-slider');
+        const magmaSizeVal = document.getElementById('magma-size-val');
+        if (magmaSizeSlider) magmaSizeSlider.oninput = (e) => magmaSizeVal.innerText = e.target.value;
+
+        const conveyorForceSlider = document.getElementById('conveyor-force-slider');
+        const conveyorForceVal = document.getElementById('conveyor-force-val');
+        if (conveyorForceSlider) conveyorForceSlider.oninput = (e) => conveyorForceVal.innerText = e.target.value;
+
+        const conveyorTimeSlider = document.getElementById('conveyor-time-slider');
+        const conveyorTimeVal = document.getElementById('conveyor-time-val');
+        if (conveyorTimeSlider) conveyorTimeSlider.oninput = (e) => conveyorTimeVal.innerText = e.target.value;
+
+        const iceFrictionSlider = document.getElementById('ice-friction-slider');
+        const iceFrictionVal = document.getElementById('ice-friction-val');
+        if (iceFrictionSlider) iceFrictionSlider.oninput = (e) => iceFrictionVal.innerText = e.target.value;
+
+        // 多人參數滑塊連動
+        const mpMapSizeSlider = document.getElementById('mp-map-size-slider');
+        const mpMapSizeVal = document.getElementById('mp-map-size-val');
+        mpMapSizeSlider.oninput = (e) => mpMapSizeVal.innerText = e.target.value;
+
+        const mpPelletCountSlider = document.getElementById('mp-pellet-count-slider');
+        const mpPelletCountVal = document.getElementById('mp-pellet-count-val');
+        mpPelletCountSlider.oninput = (e) => mpPelletCountVal.innerText = e.target.value;
+
+        const mpSpikeCountSlider = document.getElementById('mp-spike-count-slider');
+        const mpSpikeCountVal = document.getElementById('mp-spike-count-val');
+        mpSpikeCountSlider.oninput = (e) => mpSpikeCountVal.innerText = e.target.value;
+
+        const mpSpikeDamageSlider = document.getElementById('mp-spike-damage-slider');
+        const mpSpikeDamageVal = document.getElementById('mp-spike-damage-val');
+        if (mpSpikeDamageSlider) mpSpikeDamageSlider.oninput = (e) => mpSpikeDamageVal.innerText = e.target.value;
+
+        const mpBaseForceSlider = document.getElementById('mp-base-force-slider');
+        const mpBaseForceVal = document.getElementById('mp-base-force-val');
+        mpBaseForceSlider.oninput = (e) => mpBaseForceVal.innerText = e.target.value;
+
+        const mpBoostCountSlider = document.getElementById('mp-boost-count-slider');
+        const mpBoostCountVal = document.getElementById('mp-boost-count-val');
+        mpBoostCountSlider.oninput = (e) => mpBoostCountVal.innerText = e.target.value;
+
+        const mpBoostPowerSlider = document.getElementById('mp-boost-power-slider');
+        const mpBoostPowerVal = document.getElementById('mp-boost-power-val');
+        if (mpBoostPowerSlider) mpBoostPowerSlider.oninput = (e) => mpBoostPowerVal.innerText = e.target.value;
+
+        const mpMagmaBurnSlider = document.getElementById('mp-magma-burn-slider');
+        const mpMagmaBurnVal = document.getElementById('mp-magma-burn-val');
+        mpMagmaBurnSlider.oninput = (e) => mpMagmaBurnVal.innerText = e.target.value;
+
+        const mpMagmaCountSlider = document.getElementById('mp-magma-count-slider');
+        const mpMagmaCountVal = document.getElementById('mp-magma-count-val');
+        mpMagmaCountSlider.oninput = (e) => mpMagmaCountVal.innerText = e.target.value;
+
+        const mpMagmaSizeSlider = document.getElementById('mp-magma-size-slider');
+        const mpMagmaSizeVal = document.getElementById('mp-magma-size-val');
+        if (mpMagmaSizeSlider) mpMagmaSizeSlider.oninput = (e) => mpMagmaSizeVal.innerText = e.target.value;
+
+        const mpConveyorForceSlider = document.getElementById('mp-conveyor-force-slider');
+        const mpConveyorForceVal = document.getElementById('mp-conveyor-force-val');
+        if (mpConveyorForceSlider) mpConveyorForceSlider.oninput = (e) => mpConveyorForceVal.innerText = e.target.value;
+
+        const mpConveyorTimeSlider = document.getElementById('mp-conveyor-time-slider');
+        const mpConveyorTimeVal = document.getElementById('mp-conveyor-time-val');
+        if (mpConveyorTimeSlider) mpConveyorTimeSlider.oninput = (e) => mpConveyorTimeVal.innerText = e.target.value;
+
+        const mpIceFrictionSlider = document.getElementById('mp-ice-friction-slider');
+        const mpIceFrictionVal = document.getElementById('mp-ice-friction-val');
+        if (mpIceFrictionSlider) mpIceFrictionSlider.oninput = (e) => mpIceFrictionVal.innerText = e.target.value;
+
+        // 單人設定 -> 下一步 / 返回
+        document.getElementById('btn-sp-settings-next').onclick = () => {
+            spSettingsPanel.classList.add('hidden');
+            colorPanel.classList.remove('hidden'); 
+        };
+
+        document.getElementById('btn-sp-settings-back').onclick = () => {
+            spSettingsPanel.classList.add('hidden');
+            mapSelectPanel.classList.remove('hidden'); // 返回地圖選擇
+        };
+
+        function initSinglePlayer() {
+            myId = myId || 'SP_PLAYER_' + Math.random().toString(36).substr(2, 5);
+            localGameState = { players: {}, pellets: [], spikes: [], boostPads: [], magmas: [] };
+            
+            localGameState.baseImpactForce = parseInt(document.getElementById('base-force-slider').value) || 15;
+            localGameState.boostForce = parseInt(document.getElementById('boost-power-slider').value) || 45;
+            localGameState.spikeDamage = !isNaN(parseInt(document.getElementById('spike-damage-slider').value)) ? parseInt(document.getElementById('spike-damage-slider').value) : 20;
+            localGameState.globalReverse = document.getElementById('global-reverse-select').value === 'true';
+            localGameState.conveyorForce = parseFloat(document.getElementById('conveyor-force-slider').value) || 0.5;
+            localGameState.conveyorSwitchTime = parseInt(document.getElementById('conveyor-time-slider').value) || 30;
+            localGameState.iceFriction = parseFloat(document.getElementById('ice-friction-slider').value) || 0.97;
+            
+            const pName = document.getElementById('name-input').value.trim() || '玩家1號';
+            const pColor = document.getElementById('color-input').value;
+            const npcCount = parseInt(npcCountSlider.value);
+            
+            worldSize = parseInt(mapSizeSlider.value);
+            updateWorldSize(worldSize, selectedMapType);
+
+            // 初始化輸送帶方向
+            if (selectedMapType === 'conveyor') {
+                currentConveyorDirIndex = Math.floor(Math.random() * 4);
+                lastConveyorSwitchTime = Date.now();
+                conveyorGroundMat.map.rotation = conveyorDirections[currentConveyorDirIndex].rot;
+            }
+            
+            localGameState.players[myId] = createLocalPlayer(pName, pColor);
+            
+            const botNames = ['Quantum', 'Cosmo', 'Nebula', 'Apex', 'Titan', 'Vortex', 'Vector', 'Matrix', 'Eclipse', 'Specter'];
+            for(let i=0; i<npcCount; i++) {
+                let bName = 'Bot_' + botNames[i % botNames.length] + '_' + (i + 1);
+                let bColor = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+                localGameState.players['BOT_' + i] = createLocalPlayer(bName, bColor);
+            }
+
+            const pelletCount = parseInt(document.getElementById('pellet-count-slider').value) || 50;
+            localGameState.maxPellets = pelletCount;
+            for(let i=0; i<pelletCount; i++) {
+                localGameState.pellets.push({ 
+                    x: (Math.random() - 0.5) * worldSize * 2, y: 4, z: (Math.random() - 0.5) * worldSize * 2 
+                });
+            }
+
+            const spikeCount = parseInt(spikeCountSlider.value);
+            for(let i=0; i<spikeCount; i++) {
+                localGameState.spikes.push({
+                    x: (Math.random() - 0.5) * worldSize * 1.8,
+                    z: (Math.random() - 0.5) * worldSize * 1.8
+                });
+            }
+
+            const boostCount = parseInt(boostCountSlider.value);
+            for(let i=0; i<boostCount; i++) {
+                localGameState.boostPads.push({
+                    x: (Math.random() - 0.5) * worldSize * 1.6,
+                    z: (Math.random() - 0.5) * worldSize * 1.6,
+                    radius: 25
+                });
+            }
+            
+            if (selectedMapType === 'magma') {
+                const magmaCount = parseInt(document.getElementById('magma-count-slider').value) || 0;
+                const magmaBaseSize = parseInt(document.getElementById('magma-size-slider').value) || 100;
+                for(let i=0; i<magmaCount; i++) {
+                    localGameState.magmas.push({
+                        x: (Math.random() - 0.5) * worldSize * 1.5,
+                        z: (Math.random() - 0.5) * worldSize * 1.5,
+                        radius: magmaBaseSize * (0.6 + Math.random() * 0.8)
+                    });
+                }
+            }
+
+            spGameLoopInterval = setInterval(singlePlayerLoop, 30);
+            startGameUI();
+        }
+
+        function createLocalPlayer(name, color) {
+            return {
+                x: (Math.random() - 0.5) * worldSize, y: 50, z: (Math.random() - 0.5) * worldSize,
+                vx: 0, vy: 0, vz: 0, boostCooldown: 0, boostEffect: 0, damageEffect: 0,
+                radius: 20, color: color, name: name,
+                input: { dx: 0, dz: 0, jump: false, dash: false }, isGrounded: false
+            };
+        }
+
+        // 多人房主設定確認
+        document.getElementById('btn-mp-settings-create').onclick = () => {
+            isHost = true; 
+            const config = {
+                mapSize: parseInt(mpMapSizeSlider.value),
+                pelletCount: parseInt(mpPelletCountSlider.value),
+                spikeCount: parseInt(mpSpikeCountSlider.value),
+                spikeDamage: !isNaN(parseInt(mpSpikeDamageSlider.value)) ? parseInt(mpSpikeDamageSlider.value) : 20,
+                boostCount: parseInt(mpBoostCountSlider.value),
+                boostForce: parseInt(mpBoostPowerSlider.value),
+                globalReverse: document.getElementById('mp-global-reverse-select').value === 'true',
+                baseImpactForce: parseInt(mpBaseForceSlider.value),
+                conveyorForce: parseFloat(mpConveyorForceSlider.value),
+                conveyorSwitchTime: parseInt(mpConveyorTimeSlider.value),
+                iceFriction: parseFloat(mpIceFrictionSlider.value),
+                magmaCount: parseInt(mpMagmaCountSlider.value),
+                magmaSize: parseInt(mpMagmaSizeSlider.value),
+                magmaBurn: parseInt(mpMagmaBurnSlider.value) !== undefined ? parseInt(mpMagmaBurnSlider.value) : 5,
+                mapType: selectedMapType 
+            };
+            socket.emit('create_room', config);
+        };
+
+        document.getElementById('btn-mp-settings-back').onclick = () => {
+            mpSettingsPanel.classList.add('hidden');
+            mapSelectPanel.classList.remove('hidden'); // 返回選地圖
+        };
+
+        // 多人訪客加入
+        document.getElementById('btn-join-room').onclick = () => {
+            isHost = false; 
+            const code = document.getElementById('room-input').value.trim();
+            if (code) socket.emit('join_room', code);
+        };
+
+        socket.on('room_joined', (data) => {
+            isSinglePlayer = false;
+            
+            if (typeof data === 'object') {
+                currentRoom = data.roomId;
+                worldSize = data.mapSize || 800;
+                selectedMapType = data.mapType || 'normal'; // 接收後端的地圖設定
+            } else {
+                currentRoom = data;
+                worldSize = 800; 
+                selectedMapType = 'normal';
+            }
+            
+            updateWorldSize(worldSize, selectedMapType); 
+
+            multiplayerPanel.classList.add('hidden');
+            mpSettingsPanel.classList.add('hidden');
+            colorPanel.classList.remove('hidden');
+            roomInfoContainer.style.display = 'flex';
+            roomIdDisplay.innerText = `房間代碼: ${currentRoom}`;
+        });
+
+        btnCopyRoom.onclick = () => {
+            if (!currentRoom) return;
+            const tempInput = document.createElement('input');
+            tempInput.value = currentRoom;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            
+            btnCopyRoom.innerText = '✅ 已複製';
+            btnCopyRoom.style.background = 'rgba(16, 185, 129, 0.2)';
+            btnCopyRoom.style.borderColor = '#10b981';
+            btnCopyRoom.style.color = '#34d399';
+            showToast('已複製房間代碼！', true);
+            
+            setTimeout(() => {
+                btnCopyRoom.innerText = '📋 複製';
+                btnCopyRoom.style.background = 'rgba(255,255,255,0.1)';
+                btnCopyRoom.style.borderColor = 'rgba(255,255,255,0.2)';
+                btnCopyRoom.style.color = '#e2e8f0';
+            }, 2000);
+        };
+
+        socket.on('check_result', (res) => {
+            if (res.valid) {
+                colorPanel.classList.add('hidden');
+                tutorialPanel.classList.remove('hidden');
+            } else {
+                showToast(res.msg);
+            }
+        });
+
+        document.getElementById('btn-confirm-start').onclick = () => {
+            const btnConfirm = document.getElementById('btn-confirm-start');
+            btnConfirm.innerText = '進入戰場中...';
+            btnConfirm.disabled = true;
+
+            if (isSinglePlayer) {
+                initSinglePlayer();
+            } else {
+                const color = document.getElementById('color-input').value;
+                const name = document.getElementById('name-input').value.trim();
+                socket.emit('join_game', { roomId: currentRoom, color: color, name: name });
+            }
+        };
+
+        function handleJoinError(msg) {
+            showToast(msg);
+            tutorialPanel.classList.add('hidden');
+            colorPanel.classList.remove('hidden');
+            const btnConfirm = document.getElementById('btn-confirm-start');
+            btnConfirm.innerText = '我準備好了！';
+            btnConfirm.disabled = false;
+        }
+
+        socket.on('room_error', (msg) => showToast(msg));
+        socket.on('color_error', handleJoinError);
+        socket.on('name_error', handleJoinError); 
+        socket.on('game_started', startGameUI);
+
+        function startGameUI() {
+            uiLayer.style.opacity = '0';
+            setTimeout(() => uiLayer.classList.add('hidden'), 400); 
+            crosshair.style.display = 'block';
+            document.getElementById('settings-btn').style.display = 'block'; 
+            document.getElementById('leaderboard').style.display = 'block'; 
+            nameTagsContainer.style.display = 'block'; 
+            instruction.classList.remove('hidden');
+            
+            if (isTouchDevice) {
+                touchControls.style.display = 'flex';
+                instruction.innerText = '滑動螢幕旋轉視角 | 雙擊或觸控按鈕進行跳躍與衝刺';
+            }
+            isPlaying = true;
+            if (!isTouchDevice) document.body.requestPointerLock();
+        }
+
+        function showLossMessage(msg) {
+            instruction.innerText = msg;
+            instruction.style.color = '#ef4444';
+            instruction.style.fontSize = '1.8rem';
+            setTimeout(() => {
+                instruction.innerText = isTouchDevice ? '滑動螢幕旋轉視角 | 雙擊或觸控按鈕進行跳躍與衝刺' : '點擊畫面鎖定視角 | WASD 移動 | 空白鍵 跳躍 | Shift 鍵 衝刺';
+                instruction.style.color = 'white';
+                instruction.style.fontSize = '1.05rem';
+            }, 3000);
+        }
+
+        socket.on('you_lost', showLossMessage);
+
+        document.addEventListener('pointerlockchange', () => {
+            if (isPlaying && !isTouchDevice) {
+                if (document.pointerLockElement === document.body) settingsOverlay.classList.remove('active');
+                else settingsOverlay.classList.add('active');
+            }
+        });
+
+        document.getElementById('settings-btn').onclick = () => {
+            if (!isTouchDevice && document.pointerLockElement === document.body) document.exitPointerLock();
+            else settingsOverlay.classList.toggle('active');
+        };
+
+        document.getElementById('btn-resume-game').onclick = () => {
+            if (isTouchDevice) settingsOverlay.classList.remove('active');
+            else document.body.requestPointerLock();
+        };
+        document.getElementById('btn-leave-game').onclick = () => window.location.reload();
+
+        sensitivitySlider.oninput = (e) => {
+            const val = e.target.value;
+            sensitivityValue.innerText = val;
+            mouseSensitivityMultiplier = val / 50; 
+        };
+
+        document.body.addEventListener('click', (e) => {
+            if (isPlaying && !isTouchDevice && !settingsOverlay.classList.contains('active') && 
+                document.pointerLockElement !== document.body && 
+                e.target.id !== 'settings-btn' && !e.target.closest('#settings-overlay') && !e.target.closest('.touch-btn')) {
+                document.body.requestPointerLock();
+            }
+        });
+
+        let touchStartX = 0, touchStartY = 0;
+        document.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === document.body && !isTouchDevice) {
+                yaw -= e.movementX * baseSensitivity * mouseSensitivityMultiplier;
+                pitch += e.movementY * baseSensitivity * mouseSensitivityMultiplier; 
+                pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
+            }
+        });
+        document.addEventListener('touchstart', (e) => {
+            if (isPlaying && isTouchDevice && e.touches.length === 1) {
+                touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
+            }
+        }, { passive: true });
+        document.addEventListener('touchmove', (e) => {
+            if (isPlaying && isTouchDevice && e.touches.length === 1 && !settingsOverlay.classList.contains('active')) {
+                yaw -= (e.touches[0].clientX - touchStartX) * baseSensitivity * 0.5 * mouseSensitivityMultiplier;
+                pitch += (e.touches[0].clientY - touchStartY) * baseSensitivity * 0.5 * mouseSensitivityMultiplier; 
+                pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
+                touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
+            }
+        }, { passive: true });
+
+        document.addEventListener('mousedown', (e) => { if (isPlaying && e.button === 2) mouseRightClickDash = true; });
+        document.addEventListener('mouseup', (e) => { if (isPlaying && e.button === 2) mouseRightClickDash = false; });
+        document.addEventListener('contextmenu', (e) => { if (isPlaying) e.preventDefault(); });
+
+        const touchJumpBtn = document.getElementById('touch-jump-btn');
+        const touchDashBtn = document.getElementById('touch-dash-btn');
+
+        touchJumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); justJumped = true; });
+        touchDashBtn.addEventListener('touchstart', (e) => { e.preventDefault(); isTouchDashing = true; });
+        touchDashBtn.addEventListener('touchend', (e) => { e.preventDefault(); isTouchDashing = false; });
+
+        window.addEventListener('keydown', (e) => {
+            if (!e.key) return;
+            const k = e.key.toLowerCase();
+            if (keys.hasOwnProperty(k)) keys[k] = true;
+            if (e.key === 'Shift') keys.shift = true;
+            if (e.key === ' ' && !justJumped) justJumped = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (!e.key) return;
+            const k = e.key.toLowerCase();
+            if (keys.hasOwnProperty(k)) keys[k] = false;
+            if (e.key === 'Shift') keys.shift = false;
+        });
+
+        setInterval(() => {
+            if (!isPlaying) return;
+
+            let moveX = 0, moveZ = 0;
+            if (keys.w) moveZ -= 1;
+            if (keys.s) moveZ += 1;
+            if (keys.a) moveX -= 1;
+            if (keys.d) moveX += 1;
+            
+            let isReversed = isSinglePlayer ? (localGameState.globalReverse === true) : (gameState.globalReverse === true);
+            document.getElementById('reverse-indicator').style.display = isReversed ? 'block' : 'none';
+            
+            if (isReversed) {
+                moveX *= -1;
+                moveZ *= -1;
+            }
+
+            let dx = moveX * Math.cos(yaw) + moveZ * Math.sin(yaw);
+            let dz = -moveX * Math.sin(yaw) + moveZ * Math.cos(yaw);
+            let len = Math.hypot(dx, dz);
+            if (len > 0) { dx /= len; dz /= len; }
+
+            if (isTouchDevice && len === 0 && (isTouchDashing || justJumped)) {
+                dx = -Math.sin(yaw); dz = -Math.cos(yaw);
+            }
+
+            const dashPressed = keys.shift || mouseRightClickDash || isTouchDashing;
+
+            if (isSinglePlayer) {
+                if (localGameState.players[myId]) localGameState.players[myId].input = { dx, dz, jump: justJumped, dash: dashPressed };
+            } else if (currentRoom) {
+                socket.emit('player_input', { dx, dz, jump: justJumped, dash: dashPressed });
+            }
+            justJumped = false; 
+        }, 30);
+
+        function updateLeaderboard() {
+            const listDiv = document.getElementById('leaderboard-list');
+            if (!gameState.players) return;
+
+            const playersArr = Object.keys(gameState.players).map(id => ({ id: id, ...gameState.players[id] }));
+            playersArr.sort((a, b) => b.radius - a.radius);
+
+            let html = '';
+            playersArr.slice(0, 5).forEach((p, index) => {
+                const isMe = p.id === myId;
+                const rowStyle = isMe ? 'background: rgba(255,255,255,0.1); padding: 6px; border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.3);' : '';
+                const displayName = p.name || '無名氏';
+                
+                html += `
+                    <div class="leaderboard-item" style="${rowStyle}">
+                        <div class="player-info" style="flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-right: 10px;">
+                            <span style="width: 15px; color: #94a3b8; display: inline-block;">${index + 1}.</span>
+                            <span class="player-color-dot" style="background-color: ${p.color}; box-shadow: 0 0 5px ${p.color};"></span>
+                            <span style="color: ${isMe ? '#38bdf8' : 'white'};">${isMe ? displayName + ' (你)' : displayName}</span>
+                        </div>
+                        <span class="player-score">${Math.floor(p.radius)}</span>
+                    </div>
+                `;
+            });
+            listDiv.innerHTML = html;
+        }
+
+        socket.on('update_game_state', (state) => {
+            if (!isSinglePlayer) { gameState = state; updateLeaderboard(); }
+        });
+
+        // 渲染動畫迴圈
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!isPlaying) return;
+
+            // 輸送帶地圖的材質動畫：箭頭流動與平滑轉向
+            if (selectedMapType === 'conveyor' && ground && ground.material.map) {
+                // 流動特效 (UV offset)
+                ground.material.map.offset.y -= 0.015;
+                
+                // 警報狀態閃爍變紅
+                if (conveyorIsWarning) {
+                    let pulse = Math.abs(Math.sin(Date.now() * 0.01));
+                    ground.material.color.setHex(pulse > 0.5 ? 0xff4444 : 0xffffff);
+                } else {
+                    ground.material.color.setHex(0xffffff);
+                }
+
+                // 平滑轉向邏輯
+                let targetRot = conveyorDirections[currentConveyorDirIndex].rot;
+                let currentRot = ground.material.map.rotation;
+                let diff = targetRot - currentRot;
+                // 正規化角度差異至 -PI ~ PI
+                while(diff < -Math.PI) diff += Math.PI * 2;
+                while(diff > Math.PI) diff -= Math.PI * 2;
+                
+                if (Math.abs(diff) > 0.01) {
+                    ground.material.map.rotation += diff * 0.08; // 平滑過渡
+                }
+            }
+
+            const currentPlayers = {};
+            if (gameState.players) {
+                for (let id in gameState.players) {
+                    currentPlayers[id] = true;
+                    const p = gameState.players[id];
+                    
+                    if (!meshes.players[id]) {
+                        const mat = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.7, metalness: 0.1, map: ballPattern });
+                        const mesh = new THREE.Mesh(baseSphereGeo, mat);
+                        mesh.castShadow = true; mesh.receiveShadow = true;
+                        scene.add(mesh); meshes.players[id] = mesh;
+                    }
+                    if (!nameTagsDOM[id]) {
+                        const tag = document.createElement('div');
+                        tag.className = 'name-tag';
+                        nameTagsContainer.appendChild(tag);
+                        nameTagsDOM[id] = tag;
+                    }
+                    nameTagsDOM[id].innerText = p.name || '無名氏';
+                    nameTagsDOM[id].style.borderColor = p.color; 
+                    if (id === myId) nameTagsDOM[id].style.color = '#38bdf8'; 
+                    
+                    const mesh = meshes.players[id];
+                    const stepX = ((p.x || 0) - mesh.position.x) * 0.2;
+                    const stepY = ((p.y || 20) - mesh.position.y) * 0.2;
+                    const stepZ = ((p.z || 0) - mesh.position.z) * 0.2;
+
+                    mesh.position.x += stepX; mesh.position.y += stepY; mesh.position.z += stepZ;
+                    
+                    const targetScale = p.radius || 20;
+                    const currentRadius = mesh.scale.x || 1; 
+
+                    const distance = Math.hypot(stepX, stepZ);
+                    if (distance > 0.05) {
+                        const angle = distance / currentRadius;
+                        mesh.rotateOnWorldAxis(new THREE.Vector3(stepZ, 0, -stepX).normalize(), angle);
+                    }
+
+                    mesh.scale.x += (targetScale - mesh.scale.x) * 0.1;
+                    mesh.scale.y += (targetScale - mesh.scale.y) * 0.1;
+                    mesh.scale.z += (targetScale - mesh.scale.z) * 0.1;
+
+                    if (p.damageEffect > 0) { mesh.material.emissive.setHex(0xff0000); mesh.material.emissiveIntensity = 0.8; } 
+                    else if (p.boostEffect > 0) { mesh.material.emissive.setHex(0x06b6d4); mesh.material.emissiveIntensity = 0.6 + Math.sin(Date.now() * 0.02) * 0.4; } 
+                    else { mesh.material.emissive.setHex(0x000000); }
+
+                    const tagPos = mesh.position.clone();
+                    tagPos.y += currentRadius + 8; tagPos.project(camera); 
+
+                    if (tagPos.z < 1) { 
+                        nameTagsDOM[id].style.left = `${(tagPos.x * 0.5 + 0.5) * window.innerWidth}px`;
+                        nameTagsDOM[id].style.top = `${(tagPos.y * -0.5 + 0.5) * window.innerHeight}px`;
+                        nameTagsDOM[id].style.opacity = '1';
+                    } else { nameTagsDOM[id].style.opacity = '0'; }
+
+                    if (id === myId) {
+                        const cameraDistance = 150 + p.radius * 2.8; 
+                        const cx = mesh.position.x + cameraDistance * Math.sin(yaw) * Math.cos(pitch);
+                        const cy = mesh.position.y + cameraDistance * Math.sin(pitch) + p.radius * 1.5; 
+                        const cz = mesh.position.z + cameraDistance * Math.cos(yaw) * Math.cos(pitch);
+
+                        camera.position.set(cx, Math.max(3, p.radius * 0.4, cy), cz); 
+                        camera.lookAt(mesh.position);
+                        scene.fog.near = cameraDistance + 200; scene.fog.far = cameraDistance + 1500; 
+                    }
+                }
+            }
+
+            for (let id in meshes.players) {
+                if (!currentPlayers[id]) {
+                    scene.remove(meshes.players[id]); meshes.players[id].material.dispose(); delete meshes.players[id];
+                    if (nameTagsDOM[id]) { nameTagsDOM[id].remove(); delete nameTagsDOM[id]; }
+                }
+            }
+
+            if (gameState.spikes) {
+                while (meshes.spikes.length < gameState.spikes.length) {
+                    const mesh = new THREE.Mesh(spikeGeo, spikeMat);
+                    mesh.position.y = 20; mesh.castShadow = true; mesh.receiveShadow = true;
+                    scene.add(mesh); meshes.spikes.push(mesh);
+                }
+                while (meshes.spikes.length > gameState.spikes.length) {
+                    const mesh = meshes.spikes.pop(); scene.remove(mesh);
+                }
+                for (let i = 0; i < gameState.spikes.length; i++) {
+                    meshes.spikes[i].position.set(gameState.spikes[i].x, 20, gameState.spikes[i].z);
+                }
+            }
+            
+            if (gameState.boostPads) {
+                while (meshes.boostPads.length < gameState.boostPads.length) {
+                    const mesh = new THREE.Mesh(boostPadGeo, boostPadMat);
+                    mesh.position.y = 0.5; mesh.receiveShadow = true;
+                    scene.add(mesh); meshes.boostPads.push(mesh);
+                }
+                while (meshes.boostPads.length > gameState.boostPads.length) {
+                    const mesh = meshes.boostPads.pop(); scene.remove(mesh);
+                }
+                for (let i = 0; i < gameState.boostPads.length; i++) {
+                    meshes.boostPads[i].position.set(gameState.boostPads[i].x, 0.5, gameState.boostPads[i].z);
+                }
+            }
+            
+            if (gameState.magmas) {
+                if (gameState.magmas.length > 0) {
+                    magmaMat.emissiveIntensity = 0.3 + Math.sin(Date.now() * 0.003) * 0.2;
+                }
+                while (meshes.magmas.length < gameState.magmas.length) {
+                    const mesh = new THREE.Mesh(magmaGeo, magmaMat);
+                    mesh.position.y = 0.2; mesh.receiveShadow = true;
+                    scene.add(mesh); meshes.magmas.push(mesh);
+                }
+                while (meshes.magmas.length > gameState.magmas.length) {
+                    const mesh = meshes.magmas.pop(); scene.remove(mesh);
+                }
+                for (let i = 0; i < gameState.magmas.length; i++) {
+                    meshes.magmas[i].position.set(gameState.magmas[i].x, 0.2, gameState.magmas[i].z);
+                    meshes.magmas[i].scale.set(gameState.magmas[i].radius, 1, gameState.magmas[i].radius);
+                }
+            }
+
+            if (gameState.pellets) {
+                while (meshes.pellets.length < gameState.pellets.length) {
+                    const mesh = new THREE.Mesh(pelletGeo, pelletMat);
+                    mesh.scale.set(4, 4, 4); scene.add(mesh); meshes.pellets.push(mesh);
+                }
+                while (meshes.pellets.length > gameState.pellets.length) {
+                    const mesh = meshes.pellets.pop(); scene.remove(mesh);
+                }
+                for (let i = 0; i < gameState.pellets.length; i++) {
+                    meshes.pellets[i].position.set(gameState.pellets[i].x, gameState.pellets[i].y || 4, gameState.pellets[i].z); 
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
