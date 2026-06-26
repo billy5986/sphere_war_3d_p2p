@@ -969,6 +969,7 @@
                 if (p.boostCooldown > 0) p.boostCooldown--;
                 if (p.boostEffect > 0) p.boostEffect--;
                 if (p.damageEffect > 0) p.damageEffect--;
+                p.inMagma = false;
                 
                 if (localGameState.magmas) {
                     for (let i = 0; i < localGameState.magmas.length; i++) {
@@ -1100,6 +1101,7 @@
                             for (let d = 0; d < dropCount; d++) {
                                 let dropAngle = Math.random() * Math.PI * 2;
                                 let dropDist = SPIKE_RADIUS + 10 + Math.random() * 60;
+                                if (localGameState.maxPellets && pellets.length >= localGameState.maxPellets) { pellets.shift(); }
                                 pellets.push({ x: spike.x + Math.cos(dropAngle) * dropDist, y: 4, z: spike.z + Math.sin(dropAngle) * dropDist });
                             }
                         }
@@ -1167,7 +1169,7 @@
                     if (id === myId) showLossMessage('你掉入虛空了！復活中...');
                     p.x = (Math.random() - 0.5) * worldSize; p.z = (Math.random() - 0.5) * worldSize;
                     p.y = 100; p.vy = 0; p.vx = 0; p.vz = 0;
-                    p.boostCooldown = 0; p.boostEffect = 0; p.damageEffect = 0; p.radius = 20; 
+                    p.boostCooldown = 0; p.boostEffect = 0; p.damageEffect = 0; p.radius = 20; p.inMagma = false; p.magmaBurnTimer = 0;
                 }
             }
 
