@@ -463,11 +463,14 @@
                 <div class="control-label"><span>岩漿殘留秒數</span><span id="mp-magma-burn-val">5</span></div>
                 <input type="range" id="mp-magma-burn-slider" min="0" max="15" value="5">
                 
-                <div class="control-label"><span>岩漿池數量</span><span id="mp-magma-count-val">1</span></div>
-                <input type="range" id="mp-magma-count-slider" min="0" max="50" value="1">
+                <div class="control-label"><span>岩漿池數量</span><span id="mp-magma-count-val">10</span></div>
+                <input type="range" id="mp-magma-count-slider" min="0" max="50" value="10">
 
                 <div class="control-label"><span>岩漿平均大小</span><span id="mp-magma-size-val">100</span></div>
                 <input type="range" id="mp-magma-size-slider" min="20" max="400" step="10" value="100">
+
+                <div class="control-label"><span>岩漿減速比率 (%)</span><span id="mp-magma-slowness-val">40</span></div>
+                <input type="range" id="mp-magma-slowness-slider" min="10" max="99" value="40">
             </div>
             
             <div class="menu-grid" style="margin-top: 25px;">
@@ -550,11 +553,14 @@
                 <div class="control-label"><span>岩漿殘留秒數</span><span id="magma-burn-val">5</span></div>
                 <input type="range" id="magma-burn-slider" min="0" max="15" value="5">
                 
-                <div class="control-label"><span>岩漿池數量</span><span id="magma-count-val">1</span></div>
-                <input type="range" id="magma-count-slider" min="0" max="50" value="1">
+                <div class="control-label"><span>岩漿池數量</span><span id="magma-count-val">10</span></div>
+                <input type="range" id="magma-count-slider" min="0" max="50" value="10">
 
                 <div class="control-label"><span>岩漿平均大小</span><span id="magma-size-val">100</span></div>
                 <input type="range" id="magma-size-slider" min="20" max="400" step="10" value="100">
+
+                <div class="control-label"><span>岩漿減速比率 (%)</span><span id="magma-slowness-val">40</span></div>
+                <input type="range" id="magma-slowness-slider" min="10" max="99" value="40">
             </div>
             
             <div class="control-label">NPC 難度 (AI)</div>
@@ -1005,7 +1011,8 @@
                 let dashMult = Math.max(1.2, 2.0 - sizeFactor * 0.0053); 
                 let dashCost = 0.05 + sizeFactor * 0.0026;
                 let speed = isDashing ? baseSpeed * dashMult : baseSpeed; 
-                if (p.inMagma) speed *= 0.4;
+                let slownessRatio = localGameState.magmaSlowness !== undefined ? localGameState.magmaSlowness : 0.4;
+                if (p.inMagma) speed *= (1 - slownessRatio);
 
                 if (isDashing) { p.radius -= dashCost; if (p.radius < 20) p.radius = 20; }
                 
@@ -1449,6 +1456,14 @@
         const mpIceFrictionVal = document.getElementById('mp-ice-friction-val');
         if (mpIceFrictionSlider) mpIceFrictionSlider.oninput = (e) => mpIceFrictionVal.innerText = e.target.value;
 
+        const magmaSlownessSlider = document.getElementById('magma-slowness-slider');
+        const magmaSlownessVal = document.getElementById('magma-slowness-val');
+        if (magmaSlownessSlider) magmaSlownessSlider.oninput = (e) => magmaSlownessVal.innerText = e.target.value;
+
+        const mpMagmaSlownessSlider = document.getElementById('mp-magma-slowness-slider');
+        const mpMagmaSlownessVal = document.getElementById('mp-magma-slowness-val');
+        if (mpMagmaSlownessSlider) mpMagmaSlownessSlider.oninput = (e) => mpMagmaSlownessVal.innerText = e.target.value;
+
         document.getElementById('btn-sp-settings-next').onclick = () => {
             spSettingsPanel.classList.add('hidden');
             colorPanel.classList.remove('hidden'); 
@@ -1470,6 +1485,7 @@
             localGameState.conveyorForce = parseFloat(document.getElementById('conveyor-force-slider').value) || 0.5;
             localGameState.conveyorSwitchTime = parseInt(document.getElementById('conveyor-time-slider').value) || 30;
             localGameState.iceFriction = parseFloat(document.getElementById('ice-friction-slider').value) || 0.97;
+            localGameState.magmaSlowness = parseFloat(document.getElementById('magma-slowness-slider').value) / 100 || 0.4;
             
             const pName = document.getElementById('name-input').value.trim() || '玩家1號';
             const pColor = document.getElementById('color-input').value;
@@ -1525,7 +1541,7 @@
                     localGameState.magmas.push({
                         x: (Math.random() - 0.5) * worldSize * 1.5,
                         z: (Math.random() - 0.5) * worldSize * 1.5,
-                        radius: magmaBaseSize * (0.6 + Math.random() * 0.8)
+                        radius: magmaBaseSize
                     });
                 }
             }
@@ -1560,6 +1576,7 @@
                 magmaCount: parseInt(mpMagmaCountSlider.value),
                 magmaSize: parseInt(mpMagmaSizeSlider.value),
                 magmaBurn: parseInt(mpMagmaBurnSlider.value) !== undefined ? parseInt(mpMagmaBurnSlider.value) : 5,
+                magmaSlowness: parseFloat(mpMagmaSlownessSlider.value) / 100 || 0.4,
                 mapType: selectedMapType 
             };
             socket.emit('create_room', config);
