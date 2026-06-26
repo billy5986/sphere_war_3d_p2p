@@ -402,6 +402,19 @@
                     </div>
                 </div>
             </div>
+
+            </div>
+            
+            <div class="divider" style="margin: 20px 0 10px 0;">進階連線設定</div>
+            <div class="menu-card" style="padding: 15px; border-color: rgba(16, 185, 129, 0.3);">
+                <h3 style="font-size: 1rem; color: #34d399; margin-bottom: 10px;">🔗 自訂伺服器 (測試/ngrok)</h3>
+                <div class="input-group" style="margin-bottom: 0;">
+                    <input type="text" id="custom-server-input" placeholder="留白則使用預設雲端" style="padding: 10px; font-size: 0.85rem; margin-bottom: 0;">
+                    <button id="btn-save-server" class="success" style="padding: 10px 15px; font-size: 0.9rem;">儲存並重整</button>
+                </div>
+            </div>
+            <button id="btn-mp-back" class="danger" style="margin-top: 15px; padding: 12px;">返回主選單</button>
+        </div>
             
             <button id="btn-mp-back" class="danger" style="margin-top: 15px; padding: 12px;">返回主選單</button>
         </div>
@@ -632,8 +645,39 @@
             setTimeout(() => input.classList.remove('shake-error'), 400);
         }
 
-        const backendUrl = 'https://sphere-war.onrender.com';
+        // 🔽 修改：動態讀取伺服器網址 🔽
+        const defaultBackend = 'https://sphere-war.onrender.com';
+        // 從瀏覽器記憶中讀取是否有自訂的 ngrok 網址
+        const customBackend = localStorage.getItem('sphere_war_custom_server');
+        const backendUrl = customBackend ? customBackend : defaultBackend;
+        
         const socket = io(backendUrl, { autoConnect: true });
+        
+        // 將網址顯示在輸入框中
+        window.addEventListener('DOMContentLoaded', () => {
+            const serverInput = document.getElementById('custom-server-input');
+            if (customBackend) {
+                serverInput.value = customBackend;
+                // 在連線狀態加上提示，避免忘記自己連在測試服
+                document.getElementById('status-text').innerText += ' (自訂)';
+            }
+
+            // 綁定儲存按鈕的事件
+            document.getElementById('btn-save-server').onclick = () => {
+                const val = serverInput.value.trim();
+                if (val) {
+                    localStorage.setItem('sphere_war_custom_server', val);
+                    showToast('已切換至自訂伺服器，重新載入中...', true);
+                } else {
+                    // 如果輸入框留白，就清空記憶，恢復預設的 Render 伺服器
+                    localStorage.removeItem('sphere_war_custom_server');
+                    showToast('已恢復預設伺服器，重新載入中...', true);
+                }
+                // 延遲 1.5 秒後重新整理網頁套用新網址
+                setTimeout(() => window.location.reload(), 1500);
+            };
+        });
+        // 🔼 修改結束 🔼
 
         // --- 地圖系統設計 ---
         const MapTypes = [
