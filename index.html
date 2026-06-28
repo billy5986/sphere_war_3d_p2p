@@ -1589,7 +1589,7 @@
                         let nz = dist > 0 ? (p.z - spike.z) / dist : 0;
                         p.x += nx * overlap; p.z += nz * overlap;
 
-                        if (p.radius > 40) {
+                        if (p.radius > 20) {
                             let dmgPercent = localGameState.spikeDamage !== undefined ? localGameState.spikeDamage : 20;
                             let lostEnergy = (p.radius - 20) * (dmgPercent / 100);
                             p.radius -= lostEnergy;
