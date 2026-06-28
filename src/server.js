@@ -36,6 +36,7 @@ function spawnBoostPad(worldSize) {
         radius: 25
     };
 }
+
 // 產生岩漿
 function spawnMagma(worldSize, magmaBaseSize) {
     return {
@@ -46,7 +47,7 @@ function spawnMagma(worldSize, magmaBaseSize) {
 }
 
 const CONVEYOR_CYCLE_MS = 30000;
-const CONVEYOR_FORCE = 0.5;
+const CONVEYOR_FORCE = 2.5;
 const conveyorDirections = [
     { x: 1, z: 0 },
     { x: 0, z: 1 },
@@ -70,7 +71,7 @@ io.on('connection', (socket) => {
         const magmaCount = config.magmaCount !== undefined ? config.magmaCount : 10;
         const magmaSize = config.magmaSize !== undefined ? config.magmaSize : 100;
         const baseImpactForce = config.baseImpactForce !== undefined ? config.baseImpactForce : 15;
-        const conveyorForce = config.conveyorForce !== undefined ? config.conveyorForce : 0.5;
+        const conveyorForce = config.conveyorForce !== undefined ? config.conveyorForce : 2.5;
         const conveyorSwitchTime = config.conveyorSwitchTime !== undefined ? config.conveyorSwitchTime : 30;
         const iceFriction = config.iceFriction !== undefined ? config.iceFriction : 0.97;
         const spikeDamage = config.spikeDamage !== undefined ? config.spikeDamage : 20;
@@ -110,12 +111,17 @@ io.on('connection', (socket) => {
         for (let i = 0; i < maxPellets; i++) rooms[roomId].pellets.push(spawnPellet(mapSize));
         for (let i = 0; i < spikeCount; i++) rooms[roomId].spikes.push(spawnSpike(mapSize));
         for (let i = 0; i < boostCount; i++) rooms[roomId].boostPads.push(spawnBoostPad(mapSize)); 
-        for (let i = 0; i < magmaCount; i++) rooms[roomId].magmas.push(spawnMagma(mapSize, magmaSize));
+        
+        // 【關鍵修復一】只有在地圖種類為 magma (岩漿) 時，才在伺服器端產生岩漿，避免其他地圖出現隱形岩漿
+        if (mapType === 'magma') {
+            for (let i = 0; i < magmaCount; i++) rooms[roomId].magmas.push(spawnMagma(mapSize, magmaSize));
+        }
 
         socket.join(roomId);
         currentRoom = roomId;
-        // 將房間代碼和地圖大小回傳給前端，讓前端同步地圖網格
-        socket.emit('room_joined', { roomId: roomId, mapSize: mapSize });
+        
+        // 【關鍵修復二】將 mapType (地圖類型) 傳回前端，讓前端能夠渲染對應的地板與格線貼圖
+        socket.emit('room_joined', { roomId: roomId, mapSize: mapSize, mapType: mapType });
     });
 
     socket.on('join_room', (roomId) => {
@@ -123,8 +129,12 @@ io.on('connection', (socket) => {
         if (rooms[roomId]) {
             socket.join(roomId);
             currentRoom = roomId;
-            // 加入的玩家也需要知道該房間的地圖大小
-            socket.emit('room_joined', { roomId: roomId, mapSize: rooms[roomId].worldSize });
+            // 【關鍵修復三】讓新加入的玩家也同步拿到 mapType
+            socket.emit('room_joined', { 
+                roomId: roomId, 
+                mapSize: rooms[roomId].worldSize, 
+                mapType: rooms[roomId].mapType 
+            });
         } else {
             socket.emit('room_error', '找不到該房間！');
         }
@@ -208,7 +218,7 @@ setInterval(() => {
                 conveyorIsWarning = true;
             }
             let dirObj = conveyorDirections[room.currentConveyorDirIndex];
-            let cForce = room.conveyorForce || 0.5;
+            let cForce = room.conveyorForce || 2.5;
             currentConveyorForce.x = dirObj.x * cForce;
             currentConveyorForce.z = dirObj.z * cForce;
         }
@@ -228,10 +238,13 @@ setInterval(() => {
             if (p.damageEffect > 0) p.damageEffect--;
             p.inMagma = false;
 
-            for(let i=0; i<magmas.length; i++) {
-                if (Math.hypot(p.x - magmas[i].x, p.z - magmas[i].z) < p.radius + magmas[i].radius) {
-                    p.inMagma = true;
-                    p.magmaBurnTimer = (room.magmaBurn !== undefined ? room.magmaBurn : 5) * 33; 
+            // 只有岩漿地圖才做岩漿判定
+            if (mapType === 'magma') {
+                for(let i=0; i<magmas.length; i++) {
+                    if (Math.hypot(p.x - magmas[i].x, p.z - magmas[i].z) < p.radius + magmas[i].radius) {
+                        p.inMagma = true;
+                        p.magmaBurnTimer = (room.magmaBurn !== undefined ? room.magmaBurn : 5) * 33; 
+                    }
                 }
             }
 
@@ -367,7 +380,7 @@ setInterval(() => {
                     p.x += nx * overlap;
                     p.z += nz * overlap;
 
-                    if (p.radius > 40) {
+                    if (p.radius > 20) {
                         let dmgPercent = room.spikeDamage !== undefined ? room.spikeDamage : 20;
                         let lostEnergy = (p.radius - 20) * (dmgPercent / 100);
                         p.radius -= lostEnergy;
