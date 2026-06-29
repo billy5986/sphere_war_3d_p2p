@@ -1399,6 +1399,7 @@
             localGameState.jumpForce = hostConfig.jumpForce || 25;
             localGameState.gravity = hostConfig.gravity || 1.5;
             localGameState.boostCooldownTime = hostConfig.boostCooldownTime || 90;
+            localGameState.magmaBurn = hostConfig.magmaBurn !== undefined ? hostConfig.magmaBurn : 5;
 
             const pName = document.getElementById('name-input').value.trim() || '房主';
             const pColor = document.getElementById('color-input').value;
@@ -1417,17 +1418,17 @@
             const pelletCount = hostConfig.pelletCount || 50;
             localGameState.maxPellets = pelletCount;
             for (let i = 0; i < pelletCount; i++) {
-                localGameState.pellets.push({ x: (Math.random() - 0.5) * worldSize * 2, y: 4, z: (Math.random() - 0.5) * worldSize * 2 });
+                localGameState.pellets.push({ x: (Math.random() - 0.5) * worldSize * 1.8, y: 4, z: (Math.random() - 0.5) * worldSize * 1.8 });
             }
 
             const spikeCount = hostConfig.spikeCount || 15;
             for (let i = 0; i < spikeCount; i++) {
-                localGameState.spikes.push({ x: (Math.random() - 0.5) * worldSize * 2, z: (Math.random() - 0.5) * worldSize * 2 });
+                localGameState.spikes.push({ x: (Math.random() - 0.5) * worldSize * 1.6, z: (Math.random() - 0.5) * worldSize * 1.6 });
             }
 
             const boostCount = hostConfig.boostCount || 8;
             for (let i = 0; i < boostCount; i++) {
-                localGameState.boostPads.push({ x: (Math.random() - 0.5) * worldSize * 2, z: (Math.random() - 0.5) * worldSize * 2 });
+                localGameState.boostPads.push({ x: (Math.random() - 0.5) * worldSize * 1.6, z: (Math.random() - 0.5) * worldSize * 1.6, radius: 25 });
             }
 
             if (selectedMapType === 'magma') {
@@ -1492,6 +1493,9 @@
                 currentConveyorForce.x = dirObj.x * conveyorForce;
                 currentConveyorForce.z = dirObj.z * conveyorForce;
             }
+            
+            localGameState.currentConveyorDirIndex = currentConveyorDirIndex;
+            localGameState.conveyorIsWarning = conveyorIsWarning;
 
             let leaderId = null;
             let maxRadius = -Infinity;
@@ -1503,7 +1507,7 @@
             }
 
             for (let id in players) {
-                if (id === myId) continue;
+                if (id === myId || !id.startsWith('bot_')) continue;
                 let p = players[id];
                 let targetX = null, targetZ = null;
                 let wantsToDash = false;
@@ -1574,7 +1578,7 @@
                         let m = localGameState.magmas[i];
                         if (Math.hypot(p.x - m.x, p.z - m.z) < p.radius + m.radius && (p.y - p.radius < 5)) {
                             p.inMagma = true;
-                            let burnSecs = parseInt(document.getElementById('magma-burn-slider').value) || 5;
+                            let burnSecs = localGameState.magmaBurn !== undefined ? localGameState.magmaBurn : (parseInt(document.getElementById('magma-burn-slider').value) || 5);
                             p.magmaBurnTimer = burnSecs * 33;
                         }
                     }
