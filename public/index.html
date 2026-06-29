@@ -20,6 +20,8 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             user-select: none;
             -webkit-user-select: none;
+            touch-action: none;
+            overscroll-behavior: none;
         }
 
         canvas {
@@ -1186,6 +1188,10 @@
             </div>
 
             <div class="menu-card" style="margin-bottom: 25px;">
+                <div class="control-label" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span>全螢幕模式</span>
+                    <button id="btn-toggle-fullscreen" class="primary" style="width: auto; padding: 5px 15px; font-size: 0.9rem;">切換</button>
+                </div>
                 <div class="control-label">滑鼠靈敏度: <span id="sensitivity-value">50</span>%</div>
                 <input type="range" id="sensitivity-slider" min="1" max="100" value="50">
             </div>
@@ -1200,6 +1206,7 @@
             </div>
 
             <div class="menu-grid">
+                <button id="btn-close-settings" class="primary" style="display: none; grid-column: span 2;">關閉設定</button>
                 <button id="btn-resume-game" class="primary">繼續遊戲</button>
                 <button id="btn-leave-game" class="danger">退出戰場</button>
             </div>
@@ -1877,6 +1884,18 @@
             location.reload();
         });
 
+        document.getElementById('btn-toggle-fullscreen').addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    showToast('您的瀏覽器不支援或拒絕了全螢幕請求');
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        });
+
         let mouseSensitivityMultiplier = 1.0;
         const baseSensitivity = 0.002;
 
@@ -2538,10 +2557,20 @@
         function updateSettingsOverlay() {
             const inGameRoomInfo = document.getElementById('in-game-room-info');
             const inGameRoomCode = document.getElementById('in-game-room-code');
-            if (!isSinglePlayer && currentRoom) {
-                inGameRoomInfo.classList.remove('hidden');
-                inGameRoomCode.innerText = currentRoom;
+            if (isPlaying) {
+                document.getElementById('btn-close-settings').style.display = 'none';
+                document.getElementById('btn-resume-game').style.display = 'block';
+                document.getElementById('btn-leave-game').style.display = 'block';
+                if (!isSinglePlayer && currentRoom) {
+                    inGameRoomInfo.classList.remove('hidden');
+                    inGameRoomCode.innerText = currentRoom;
+                } else {
+                    inGameRoomInfo.classList.add('hidden');
+                }
             } else {
+                document.getElementById('btn-close-settings').style.display = 'block';
+                document.getElementById('btn-resume-game').style.display = 'none';
+                document.getElementById('btn-leave-game').style.display = 'none';
                 inGameRoomInfo.classList.add('hidden');
             }
         }
@@ -2586,8 +2615,11 @@
         };
 
         document.getElementById('btn-resume-game').onclick = () => {
-            if (isTouchDevice) settingsOverlay.classList.remove('active');
-            else document.body.requestPointerLock();
+            settingsOverlay.classList.remove('active');
+            if (!isTouchDevice) document.body.requestPointerLock();
+        };
+        document.getElementById('btn-close-settings').onclick = () => {
+            settingsOverlay.classList.remove('active');
         };
         document.getElementById('btn-leave-game').onclick = () => window.location.reload();
 
@@ -2597,8 +2629,8 @@
             mouseSensitivityMultiplier = val / 50;
         };
 
-        document.body.addEventListener('click', (e) => {
-            if (isPlaying && !isTouchDevice && !settingsOverlay.classList.contains('active') &&
+        document.body.addEventListener('pointerdown', (e) => {
+            if (isPlaying && e.pointerType === 'mouse' && !settingsOverlay.classList.contains('active') &&
                 document.pointerLockElement !== document.body &&
                 e.target.id !== 'settings-btn' && !e.target.closest('#settings-overlay') && !e.target.closest('.touch-btn')) {
                 document.body.requestPointerLock();
