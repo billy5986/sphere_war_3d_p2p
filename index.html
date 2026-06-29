@@ -1181,7 +1181,7 @@
             setTimeout(() => input.classList.remove('shake-error'), 400);
         }
 
-        const defaultBackend = 'https://sphere-war.onrender.com';
+        const defaultBackend = window.location.origin;
         const customBackend = localStorage.getItem('sphere_war_custom_server');
         const backendUrl = customBackend ? customBackend : defaultBackend;
 
