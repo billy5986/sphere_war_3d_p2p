@@ -902,16 +902,6 @@
                 </div>
             </div>
 
-            <div class="divider" style="margin: 20px 0 10px 0;">進階連線設定</div>
-            <div class="menu-card" style="padding: 15px; border-color: rgba(16, 185, 129, 0.3);">
-                <h3 style="font-size: 1rem; color: #34d399; margin-bottom: 10px;">🔗 自訂伺服器 (測試/ngrok)</h3>
-                <div class="input-group" style="margin-bottom: 0;">
-                    <input type="text" id="custom-server-input" placeholder="留白則使用預設雲端"
-                        style="padding: 10px; font-size: 0.85rem; margin-bottom: 0;">
-                    <button id="btn-save-server" class="success"
-                        style="padding: 10px 15px; font-size: 0.9rem;">儲存並重整</button>
-                </div>
-            </div>
             <button id="btn-mp-back" class="danger" style="margin-top: 15px; padding: 12px;">返回主選單</button>
         </div>
 
@@ -1142,6 +1132,14 @@
         <div class="panel">
             <h2 class="game-title" style="font-size: 2.2rem; margin-bottom: 10px;">設定</h2>
             <div class="game-subtitle" style="margin-bottom: 20px;">Settings</div>
+
+            <div id="in-game-room-info" class="menu-card hidden" style="margin-bottom: 25px; border-color: rgba(56, 189, 248, 0.3);">
+                <div class="control-label" style="justify-content: center; margin-bottom: 5px;">目前房間代碼</div>
+                <div style="display: flex; gap: 10px; justify-content: center; align-items: center;">
+                    <span id="in-game-room-code" style="font-size: 1.5rem; font-weight: 800; color: #38bdf8; letter-spacing: 2px;"></span>
+                    <button id="btn-in-game-copy-room" class="success" style="width: auto; padding: 5px 15px; font-size: 0.9rem;">📋 複製</button>
+                </div>
+            </div>
 
             <div class="menu-card" style="margin-bottom: 25px;">
                 <div class="control-label">滑鼠靈敏度: <span id="sensitivity-value">50</span>%</div>
@@ -2472,16 +2470,54 @@
 
         socket.on('you_lost', showLossMessage);
 
+        function updateSettingsOverlay() {
+            const inGameRoomInfo = document.getElementById('in-game-room-info');
+            const inGameRoomCode = document.getElementById('in-game-room-code');
+            if (!isSinglePlayer && currentRoom) {
+                inGameRoomInfo.classList.remove('hidden');
+                inGameRoomCode.innerText = currentRoom;
+            } else {
+                inGameRoomInfo.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('btn-in-game-copy-room').onclick = () => {
+            if (currentRoom) {
+                navigator.clipboard.writeText(currentRoom);
+                const btn = document.getElementById('btn-in-game-copy-room');
+                btn.innerText = '✅ 已複製';
+                btn.style.background = 'rgba(16, 185, 129, 0.2)';
+                btn.style.borderColor = '#10b981';
+                btn.style.color = '#34d399';
+                showToast('已複製房間代碼！', true);
+                
+                setTimeout(() => {
+                    btn.innerText = '📋 複製';
+                    btn.style.background = 'rgba(255,255,255,0.1)';
+                    btn.style.borderColor = 'rgba(255,255,255,0.2)';
+                    btn.style.color = '#e2e8f0';
+                }, 2000);
+            }
+        };
+
         document.addEventListener('pointerlockchange', () => {
             if (isPlaying && !isTouchDevice) {
-                if (document.pointerLockElement === document.body) settingsOverlay.classList.remove('active');
-                else settingsOverlay.classList.add('active');
+                if (document.pointerLockElement === document.body) {
+                    settingsOverlay.classList.remove('active');
+                } else {
+                    updateSettingsOverlay();
+                    settingsOverlay.classList.add('active');
+                }
             }
         });
 
         document.getElementById('settings-btn').onclick = () => {
-            if (!isTouchDevice && document.pointerLockElement === document.body) document.exitPointerLock();
-            else settingsOverlay.classList.toggle('active');
+            if (!isTouchDevice && document.pointerLockElement === document.body) {
+                document.exitPointerLock();
+            } else {
+                updateSettingsOverlay();
+                settingsOverlay.classList.toggle('active');
+            }
         };
 
         document.getElementById('btn-resume-game').onclick = () => {
