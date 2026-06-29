@@ -1458,8 +1458,7 @@
 
             if (mpHostInterval) clearInterval(mpHostInterval);
             mpHostInterval = setInterval(() => {
-                if (!isGameOver) {
-                    singlePlayerLoop();
+                singlePlayerLoop();
                     
                     let statePacket = {
                         players: localGameState.players,
@@ -1478,7 +1477,6 @@
                             try { hostPeers[id].dc.send(stateStr); } catch(e){}
                         }
                     }
-                }
             }, 30);
         }
 
