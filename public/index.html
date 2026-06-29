@@ -2658,8 +2658,13 @@
             }
         });
 
+        let lastRenderTime = performance.now();
+
         function animate() {
             requestAnimationFrame(animate);
+            let nowRenderTime = performance.now();
+            let dt = nowRenderTime - lastRenderTime;
+            lastRenderTime = nowRenderTime;
             if (!isPlaying) return;
 
             // 輸送帶方向與動畫判定
@@ -2718,21 +2723,23 @@
                     }
                     
                     if (p.realVx !== undefined) {
-                        mesh.renderTargetX += p.realVx * 0.55;
-                        mesh.renderTargetZ += p.realVz * 0.55;
+                        mesh.renderTargetX += p.realVx * (dt / 30);
+                        mesh.renderTargetZ += p.realVz * (dt / 30);
                     }
                     
                     let trueTargetX = p.x || 0;
                     let trueTargetY = p.y || 20;
                     let trueTargetZ = p.z || 0;
 
-                    mesh.renderTargetX += (trueTargetX - mesh.renderTargetX) * 0.3;
-                    mesh.renderTargetY += (trueTargetY - mesh.renderTargetY) * 0.3;
-                    mesh.renderTargetZ += (trueTargetZ - mesh.renderTargetZ) * 0.3;
+                    let lerp1 = 1 - Math.pow(0.7, dt / 16.6);
+                    mesh.renderTargetX += (trueTargetX - mesh.renderTargetX) * lerp1;
+                    mesh.renderTargetY += (trueTargetY - mesh.renderTargetY) * lerp1;
+                    mesh.renderTargetZ += (trueTargetZ - mesh.renderTargetZ) * lerp1;
 
-                    const stepX = (mesh.renderTargetX - mesh.position.x) * 0.4;
-                    const stepY = (mesh.renderTargetY - mesh.position.y) * 0.4;
-                    const stepZ = (mesh.renderTargetZ - mesh.position.z) * 0.4;
+                    let lerp2 = 1 - Math.pow(0.6, dt / 16.6);
+                    const stepX = (mesh.renderTargetX - mesh.position.x) * lerp2;
+                    const stepY = (mesh.renderTargetY - mesh.position.y) * lerp2;
+                    const stepZ = (mesh.renderTargetZ - mesh.position.z) * lerp2;
 
                     mesh.position.x += stepX; mesh.position.y += stepY; mesh.position.z += stepZ;
 
