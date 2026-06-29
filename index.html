@@ -1190,6 +1190,15 @@
                 <input type="range" id="sensitivity-slider" min="1" max="100" value="50">
             </div>
 
+            <div class="menu-card" style="margin-bottom: 25px;">
+                <div class="control-label" style="margin-bottom: 10px;">伺服器位址 (進階)</div>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="custom-backend-input" placeholder="預設使用官方伺服器" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.5); color: white;">
+                    <button id="btn-save-backend" class="success" style="width: auto; padding: 0 15px;">儲存</button>
+                </div>
+                <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 5px;">留白則使用預設伺服器。修改後將重新載入遊戲。</div>
+            </div>
+
             <div class="menu-grid">
                 <button id="btn-resume-game" class="primary">繼續遊戲</button>
                 <button id="btn-leave-game" class="danger">退出戰場</button>
@@ -1223,7 +1232,7 @@
             setTimeout(() => input.classList.remove('shake-error'), 400);
         }
 
-        const defaultBackend = window.location.origin;
+        const defaultBackend = 'https://spherewar3dp2p-production.up.railway.app';
         const customBackend = localStorage.getItem('sphere_war_custom_server');
         const backendUrl = customBackend ? customBackend : defaultBackend;
 
@@ -1850,6 +1859,23 @@
         const settingsOverlay = document.getElementById('settings-overlay');
         const sensitivitySlider = document.getElementById('sensitivity-slider');
         const sensitivityValue = document.getElementById('sensitivity-value');
+
+        const customBackendInput = document.getElementById('custom-backend-input');
+        const btnSaveBackend = document.getElementById('btn-save-backend');
+
+        if (customBackend) {
+            customBackendInput.value = customBackend;
+        }
+
+        btnSaveBackend.addEventListener('click', () => {
+            const val = customBackendInput.value.trim();
+            if (val) {
+                localStorage.setItem('sphere_war_custom_server', val);
+            } else {
+                localStorage.removeItem('sphere_war_custom_server');
+            }
+            location.reload();
+        });
 
         let mouseSensitivityMultiplier = 1.0;
         const baseSensitivity = 0.002;
