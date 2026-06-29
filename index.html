@@ -2233,6 +2233,7 @@
                 magmaSlowness: parseFloat(mpMagmaSlownessSlider.value) / 100 || 0.4,
                 mapType: selectedMapType
             };
+            hostConfig = config;
             socket.emit('create_room', config);
         };
 
