@@ -8,9 +8,8 @@
     <meta name="title" content="Sphere War 3D">
     <meta property="og:description" content="《Sphere War 3D》是一款結合物理碰撞與生存競技的 3D 對戰遊戲。吞噬光點成長，撞出對手取得勝利！">
     <meta property="og:title" content="Sphere War 3D">
-    <meta property="og:image"
-        content="https://cdn.jsdelivr.net/gh/billy5986/sphere_war@main/assets/images/sphere_war_3d_thumbnail.png">
-    <meta property="og:url" content="https://billy5986.github.io/sphere_war/">
+    <meta property="og:image" content="https://cdn.jsdelivr.net/gh/billy5986/sphere_war_3d_p2p@main/assets/images/sphere_war_3d_thumbnail.png">
+    <meta property="og:url" content="https://billy5986.github.io/sphere_war_3d_p2p/">
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
@@ -703,10 +702,49 @@
             width: 100%;
             display: none;
             justify-content: space-between;
+            align-items: flex-end;
             padding: 0 30px;
             box-sizing: border-box;
             z-index: 15;
             pointer-events: none;
+        }
+
+        #joystick-zone {
+            width: 150px;
+            height: 150px;
+            position: relative;
+            pointer-events: auto;
+        }
+
+        #joystick-base {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: rgba(15, 23, 42, 0.4);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            left: 15px;
+            top: 15px;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+
+        #joystick-stick {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(56, 189, 248, 0.7);
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+            left: 35px;
+            top: 35px;
+            pointer-events: none;
+            transition: transform 0.1s;
+        }
+
+        #right-touch-btns {
+            display: flex;
+            gap: 15px;
         }
 
         .touch-btn {
@@ -819,8 +857,7 @@
     </div>
 
     <div id="name-tags-container"></div>
-
-    <div id="crosshair"></div>
+<div id="crosshair"></div>
     <div id="instruction" class="hidden">點擊畫面鎖定視角 | WASD 移動 | 空白鍵 跳躍 | Shift 鍵 衝刺</div>
     <div id="conveyor-warning">⚠️ 推力方向即將改變 ⚠️</div>
     <div id="reverse-indicator"
@@ -828,8 +865,15 @@
         ⚠️ 方向反轉 ⚠️</div>
 
     <div id="touch-controls">
-        <div id="touch-dash-btn" class="touch-btn">⚡ 衝刺</div>
-        <div id="touch-jump-btn" class="touch-btn">🚀 跳躍</div>
+        <div id="joystick-zone">
+            <div id="joystick-base">
+                <div id="joystick-stick"></div>
+            </div>
+        </div>
+        <div id="right-touch-btns">
+            <div id="touch-dash-btn" class="touch-btn">🏃 衝刺</div>
+            <div id="touch-jump-btn" class="touch-btn">🚀 跳躍</div>
+        </div>
     </div>
 
     <div id="ui-layer">
@@ -2537,26 +2581,97 @@
         });
 
         let touchStartX = 0, touchStartY = 0;
+        let cameraTouchId = null;
+        const virtualJoystick = { active: false, id: null, dx: 0, dy: 0, cx: 0, cy: 0, maxR: 40 };
+
         document.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement === document.body && !isTouchDevice) {
+            if (document.pointerLockElement === document.body) {
                 yaw -= e.movementX * baseSensitivity * mouseSensitivityMultiplier;
                 pitch += e.movementY * baseSensitivity * mouseSensitivityMultiplier;
                 pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
             }
         });
+
         document.addEventListener('touchstart', (e) => {
-            if (isPlaying && isTouchDevice && e.touches.length === 1) {
-                touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
+            if (isPlaying && isTouchDevice) {
+                let cameraTouch = Array.from(e.touches).find(t => t.identifier !== virtualJoystick.id && !e.target.closest('#touch-controls'));
+                if (cameraTouch) {
+                    touchStartX = cameraTouch.clientX;
+                    touchStartY = cameraTouch.clientY;
+                    cameraTouchId = cameraTouch.identifier;
+                }
             }
         }, { passive: true });
+
         document.addEventListener('touchmove', (e) => {
-            if (isPlaying && isTouchDevice && e.touches.length === 1 && !settingsOverlay.classList.contains('active')) {
-                yaw -= (e.touches[0].clientX - touchStartX) * baseSensitivity * 0.5 * mouseSensitivityMultiplier;
-                pitch += (e.touches[0].clientY - touchStartY) * baseSensitivity * 0.5 * mouseSensitivityMultiplier;
-                pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
-                touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
+            if (isPlaying && isTouchDevice && cameraTouchId !== null && !settingsOverlay.classList.contains('active')) {
+                let cameraTouch = Array.from(e.touches).find(t => t.identifier === cameraTouchId);
+                if (cameraTouch) {
+                    yaw -= (cameraTouch.clientX - touchStartX) * baseSensitivity * 0.6 * mouseSensitivityMultiplier;
+                    pitch += (cameraTouch.clientY - touchStartY) * baseSensitivity * 0.6 * mouseSensitivityMultiplier;
+                    pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
+                    touchStartX = cameraTouch.clientX;
+                    touchStartY = cameraTouch.clientY;
+                }
             }
         }, { passive: true });
+
+        document.addEventListener('touchend', (e) => {
+            if (cameraTouchId !== null) {
+                let cameraTouchStillExists = Array.from(e.touches).find(t => t.identifier === cameraTouchId);
+                if (!cameraTouchStillExists) cameraTouchId = null;
+            }
+        });
+
+        const joystickZone = document.getElementById('joystick-zone');
+        const joystickStick = document.getElementById('joystick-stick');
+
+        joystickZone.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (!virtualJoystick.active && e.changedTouches.length > 0) {
+                let t = e.changedTouches[0];
+                virtualJoystick.active = true;
+                virtualJoystick.id = t.identifier;
+                let rect = joystickZone.getBoundingClientRect();
+                virtualJoystick.cx = rect.left + rect.width / 2;
+                virtualJoystick.cy = rect.top + rect.height / 2;
+                updateJoystick(t.clientX, t.clientY);
+            }
+        }, { passive: false });
+
+        joystickZone.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (virtualJoystick.active) {
+                let t = Array.from(e.touches).find(touch => touch.identifier === virtualJoystick.id);
+                if (t) updateJoystick(t.clientX, t.clientY);
+            }
+        }, { passive: false });
+
+        joystickZone.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (virtualJoystick.active) {
+                let t = Array.from(e.changedTouches).find(touch => touch.identifier === virtualJoystick.id);
+                if (t) {
+                    virtualJoystick.active = false;
+                    virtualJoystick.id = null;
+                    virtualJoystick.dx = 0; virtualJoystick.dy = 0;
+                    joystickStick.style.transform = `translate(0px, 0px)`;
+                }
+            }
+        }, { passive: false });
+
+        function updateJoystick(x, y) {
+            let dx = x - virtualJoystick.cx;
+            let dy = y - virtualJoystick.cy;
+            let distance = Math.hypot(dx, dy);
+            if (distance > virtualJoystick.maxR) {
+                dx = (dx / distance) * virtualJoystick.maxR;
+                dy = (dy / distance) * virtualJoystick.maxR;
+            }
+            virtualJoystick.dx = dx / virtualJoystick.maxR;
+            virtualJoystick.dy = dy / virtualJoystick.maxR;
+            joystickStick.style.transform = `translate(${dx}px, ${dy}px)`;
+        }
 
         document.addEventListener('mousedown', (e) => { if (isPlaying && e.button === 2) mouseRightClickDash = true; });
         document.addEventListener('mouseup', (e) => { if (isPlaying && e.button === 2) mouseRightClickDash = false; });
@@ -2593,6 +2708,11 @@
             if (keys.a) moveX -= 1;
             if (keys.d) moveX += 1;
 
+            if (virtualJoystick.active) {
+                moveX += virtualJoystick.dx;
+                moveZ += virtualJoystick.dy;
+            }
+
             let isReversed = isSinglePlayer ? (localGameState.globalReverse === true) : (gameState.globalReverse === true);
             document.getElementById('reverse-indicator').style.display = isReversed ? 'block' : 'none';
 
@@ -2605,10 +2725,6 @@
             let dz = -moveX * Math.sin(yaw) + moveZ * Math.cos(yaw);
             let len = Math.hypot(dx, dz);
             if (len > 0) { dx /= len; dz /= len; }
-
-            if (isTouchDevice && len === 0 && (isTouchDashing || justJumped)) {
-                dx = -Math.sin(yaw); dz = -Math.cos(yaw);
-            }
 
             const dashPressed = keys.shift || mouseRightClickDash || isTouchDashing;
 
@@ -2710,9 +2826,12 @@
                         nameTagsContainer.appendChild(tag);
                         nameTagsDOM[id] = tag;
                     }
-                    nameTagsDOM[id].innerText = p.name || '無名氏';
-                    nameTagsDOM[id].style.borderColor = p.color;
-                    if (id === myId) nameTagsDOM[id].style.color = '#38bdf8';
+                    if (nameTagsDOM[id].lastText !== p.name) {
+                        nameTagsDOM[id].innerText = p.name || '無名氏';
+                        nameTagsDOM[id].style.borderColor = p.color;
+                        if (id === myId) nameTagsDOM[id].style.color = '#38bdf8';
+                        nameTagsDOM[id].lastText = p.name;
+                    }
 
                     const mesh = meshes.players[id];
                     
