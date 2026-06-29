@@ -1196,23 +1196,7 @@
         });
 
         window.addEventListener('DOMContentLoaded', () => {
-            const serverInput = document.getElementById('custom-server-input');
-            if (customBackend) {
-                serverInput.value = customBackend;
-                document.getElementById('status-text').innerText += ' (自訂)';
-            }
-
-            document.getElementById('btn-save-server').onclick = () => {
-                const val = serverInput.value.trim();
-                if (val) {
-                    localStorage.setItem('sphere_war_custom_server', val);
-                    showToast('已切換至自訂伺服器，重新載入中...', true);
-                } else {
-                    localStorage.removeItem('sphere_war_custom_server');
-                    showToast('已恢復預設伺服器，重新載入中...', true);
-                }
-                setTimeout(() => window.location.reload(), 1500);
-            };
+            // Deprecated UI removed
         });
 
         // --- 地圖系統設計 ---
@@ -2434,10 +2418,15 @@
         socket.on('color_error', handleJoinError);
         socket.on('name_error', handleJoinError);
         socket.on('game_started', () => {
-            if (isHost) {
-                initHostGame();
+            try {
+                showToast('Received game_started, isHost: ' + isHost, true);
+                if (isHost) {
+                    initHostGame();
+                }
+                startGameUI();
+            } catch (e) {
+                showToast('Error in game_started: ' + e.message, false);
             }
-            startGameUI();
         });
 
         function startGameUI() {
