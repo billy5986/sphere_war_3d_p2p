@@ -501,7 +501,7 @@
             background: transparent;
             border: none;
             cursor: pointer;
-            display: none;
+            display: block;
             font-size: 2.2rem;
             text-align: center;
             z-index: 20;
@@ -2510,7 +2510,6 @@
             uiLayer.style.opacity = '0';
             setTimeout(() => uiLayer.classList.add('hidden'), 400);
             crosshair.style.display = 'block';
-            document.getElementById('settings-btn').style.display = 'block';
             document.getElementById('leaderboard').style.display = 'block';
             nameTagsContainer.style.display = 'block';
             instruction.classList.remove('hidden');
