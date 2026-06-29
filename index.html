@@ -1652,8 +1652,10 @@
                     environmentForceZ = currentConveyorForce.z * forceMulti;
                 }
 
-                p.x += playerMoveX + environmentForceX;
-                p.z += playerMoveZ + environmentForceZ;
+                p.realVx = playerMoveX + environmentForceX;
+                p.realVz = playerMoveZ + environmentForceZ;
+                p.x += p.realVx;
+                p.z += p.realVz;
 
                 p.vx *= friction; p.vz *= friction;
                 if (Math.abs(p.vx) < 0.1) p.vx = 0;
@@ -2708,9 +2710,29 @@
                     if (id === myId) nameTagsDOM[id].style.color = '#38bdf8';
 
                     const mesh = meshes.players[id];
-                    const stepX = ((p.x || 0) - mesh.position.x) * 0.4;
-                    const stepY = ((p.y || 20) - mesh.position.y) * 0.4;
-                    const stepZ = ((p.z || 0) - mesh.position.z) * 0.4;
+                    
+                    if (mesh.renderTargetX === undefined) {
+                        mesh.renderTargetX = p.x || 0;
+                        mesh.renderTargetY = p.y || 20;
+                        mesh.renderTargetZ = p.z || 0;
+                    }
+                    
+                    if (p.realVx !== undefined) {
+                        mesh.renderTargetX += p.realVx * 0.55;
+                        mesh.renderTargetZ += p.realVz * 0.55;
+                    }
+                    
+                    let trueTargetX = p.x || 0;
+                    let trueTargetY = p.y || 20;
+                    let trueTargetZ = p.z || 0;
+
+                    mesh.renderTargetX += (trueTargetX - mesh.renderTargetX) * 0.3;
+                    mesh.renderTargetY += (trueTargetY - mesh.renderTargetY) * 0.3;
+                    mesh.renderTargetZ += (trueTargetZ - mesh.renderTargetZ) * 0.3;
+
+                    const stepX = (mesh.renderTargetX - mesh.position.x) * 0.4;
+                    const stepY = (mesh.renderTargetY - mesh.position.y) * 0.4;
+                    const stepZ = (mesh.renderTargetZ - mesh.position.z) * 0.4;
 
                     mesh.position.x += stepX; mesh.position.y += stepY; mesh.position.z += stepZ;
 
