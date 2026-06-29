@@ -64,8 +64,10 @@ io.on('connection', (socket) => {
         
         rooms[roomId].usedColors.push(data.color);
         rooms[roomId].usedNames.push(data.name);
+        
+        socket.playerData = { color: data.color, name: data.name };
 
-        // 通知自己加入成功，前端會隱藏大廳
+        // 通知自己進入遊戲，客戶端會隱藏大廳
         socket.emit('game_started');
         
         // 告訴房主有新玩家準備好可以加入遊戲畫面了
@@ -80,11 +82,15 @@ io.on('connection', (socket) => {
         if (currentRoom && rooms[currentRoom]) {
             const room = rooms[currentRoom];
             if (socket.id === room.hostId) {
-                // 如果房主斷線，刪除房間並踢出所有人
+                // 如果是房主斷線，刪除房間並踢出所有人
                 socket.to(currentRoom).emit('host_disconnected');
                 delete rooms[currentRoom];
             } else {
-                // 如果是客機斷線，通知房主清理 WebRTC 連線與玩家實體
+                if (socket.playerData) {
+                    room.usedColors = room.usedColors.filter(c => c !== socket.playerData.color);
+                    room.usedNames = room.usedNames.filter(n => n !== socket.playerData.name);
+                }
+                // 如果是客機斷線，通知房主清除 WebRTC 連線與玩家實體
                 io.to(room.hostId).emit('client_disconnected', { clientId: socket.id });
             }
             const socketsInRoom = io.sockets.adapter.rooms.get(currentRoom);
